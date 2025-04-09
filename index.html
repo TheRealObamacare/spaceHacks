@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Flight Simulator - SpaceHacks</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Space Flight Simulator</h1>
+            <div class="navigation">
+                <button id="start-btn" class="primary-btn">Start Simulation</button>
+                <button id="reset-btn" class="secondary-btn">Reset</button>
+                <button id="help-btn" class="info-btn"><i class="fas fa-question-circle"></i> Help</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="simulation-container">
+                <canvas id="space-canvas"></canvas>
+                <div id="hud" class="hud">
+                    <div class="hud-panel left-panel">
+                        <div class="hud-item">
+                            <div class="hud-label">Velocity</div>
+                            <div id="velocity-value" class="hud-value">0 km/s</div>
+                        </div>
+                        <div class="hud-item">
+                            <div class="hud-label">Acceleration</div>
+                            <div id="acceleration-value" class="hud-value">0 m/s²</div>
+                        </div>
+                        <div class="hud-item">
+                            <div class="hud-label">Distance</div>
+                            <div id="altitude-value" class="hud-value">0 km</div>
+                        </div>
+                    </div>
+                    <div class="hud-panel right-panel">
+                        <div class="hud-item">
+                            <div class="hud-label">Fuel</div>
+                            <div class="progress-bar">
+                                <div id="fuel-bar" class="progress-fill"></div>
+                            </div>
+                        </div>
+                        <div class="hud-item">
+                            <div class="hud-label">Gravity</div>
+                            <div id="gravity-value" class="hud-value">1.0 G</div>
+                        </div>
+                        <div class="hud-item">
+                            <div class="hud-label">Mission Time</div>
+                            <div id="mission-time" class="hud-value">00:00:00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-panel">
+                <div class="panel-section">
+                    <h3>Controls</h3>
+                    <div class="control-info">
+                        <div class="key">W</div>
+                        <div class="description">Thrust Forward</div>
+                    </div>
+                    <div class="control-info">
+                        <div class="key">A</div>
+                        <div class="description">Turn Left</div>
+                    </div>
+                    <div class="control-info">
+                        <div class="key">D</div>
+                        <div class="description">Turn Right</div>
+                    </div>
+                    <div class="control-info">
+                        <div class="key">SPACE</div>
+                        <div class="description">Pause/Resume</div>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>Physics Info</h3>
+                    <div id="physics-info" class="info-box">
+                        <p>Experiment with orbital mechanics! Try to achieve a stable orbit around celestial bodies.</p>
+                        <p>Current Physics Principle: <span id="current-principle">Newton's Laws of Motion</span></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div id="modal-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tutorial modal content (hidden by default) -->
+    <div id="tutorial-content" style="display: none;">
+        <h2>How to Use the Space Flight Simulator</h2>
+        <p>Welcome to the Space Flight Simulator! This educational tool helps you learn about orbital mechanics and physics in space.</p>
+        
+        <h3>Basic Controls</h3>
+        <ul>
+            <li><strong>W</strong> - Fire main engine (thrust forward)</li>
+            <li><strong>A</strong> - Rotate spacecraft left</li>
+            <li><strong>D</strong> - Rotate spacecraft right</li>
+            <li><strong>SPACE</strong> - Pause/Resume simulation</li>
+        </ul>
+        
+        <h3>Physics Concepts</h3>
+        <p>As you navigate space, pay attention to these key physics concepts:</p>
+        <ul>
+            <li><strong>Inertia</strong>: Objects in motion stay in motion unless acted upon by an external force</li>
+            <li><strong>Orbital Mechanics</strong>: Balance between gravity and velocity creates stable orbits</li>
+            <li><strong>Conservation of Momentum</strong>: Your thrust affects your trajectory in predictable ways</li>
+            <li><strong>Universal Gravitation</strong>: Gravitational force decreases with the square of distance</li>
+        </ul>
+        
+        <h3>Simulation Features</h3>
+        <ul>
+            <li><strong>Predicted Path</strong>: When paused, a dotted yellow line shows your projected trajectory</li>
+            <li><strong>Thrust Trail</strong>: Your engine exhaust creates a visible trail showing your path</li>
+            <li><strong>Distance Display</strong>: Shows your distance to the nearest celestial body</li>
+        </ul>
+        
+        <p>Ready to begin? Click "Start Simulation" to launch your spacecraft!</p>
+    </div>
+
+    <!-- JavaScript files -->
+    <script src="js/physics.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/spacecraft.js"></script>
+    <script src="js/simulation.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 
