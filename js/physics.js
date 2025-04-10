@@ -21,16 +21,127 @@ class PhysicsEngine {
                 position: { x: 0, y: 0 },
                 mass: 5.972e24,
                 radius: 6371000,
-                color: '#1E88E5'
+                color: '#1E88E5',
+                nasa_id: '399' // JPL Horizons ID for Earth
             },
             {
                 name: 'Moon',
                 position: { x: 384400000, y: 0 },
                 mass: 7.342e22,
                 radius: 1737000,
-                color: '#9E9E9E'
+                color: '#9E9E9E',
+                nasa_id: '301' // JPL Horizons ID for Moon
             }
         ];
+        
+        // NASA API service for fetching real data
+        this.nasaApiService = null;
+        this.useRealData = false;
+    }
+    
+    /**
+     * Initialize NASA API service for real celestial data
+     * 
+     * @param {NasaApiService} apiService - The NASA API service instance
+     */
+    initializeApiService(apiService) {
+        this.nasaApiService = apiService;
+        console.log("NASA API service initialized in physics engine");
+    }
+    
+    /**
+     * Enable or disable the use of real NASA data
+     * 
+     * @param {boolean} enabled - Whether to use real data
+     */
+    setUseRealData(enabled) {
+        this.useRealData = enabled && this.nasaApiService !== null;
+        console.log(`Real NASA data ${this.useRealData ? 'enabled' : 'disabled'}`);
+    }
+    
+    /**
+     * Update celestial body positions using real ephemeris data
+     * 
+     * @returns {Promise<void>}
+     */
+    async updateCelestialBodiesFromNasa() {
+        if (!this.useRealData || !this.nasaApiService) {
+            console.log("Not using real data, skipping NASA update");
+            return;
+        }
+        
+        try {
+            console.log("Updating celestial bodies from NASA data...");
+            
+            // Get current date and the day after for ephemeris data
+            const today = new Date();
+            const tomorrow = new Date();
+            tomorrow.setDate(today.getDate() + 1);
+            
+            // Format dates for API
+            const startTime = today.toISOString().split('T')[0];
+            const stopTime = tomorrow.toISOString().split('T')[0];
+            
+            // Update each celestial body
+            for (const body of this.celestialBodies) {
+                if (body.nasa_id) {
+                    console.log(`Updating ${body.name} data from NASA...`);
+                    
+                    // Fetch data for this body
+                    const ephemerisData = await this.nasaApiService.fetchEphemerisData(
+                        body.nasa_id, 
+                        startTime,
+                        stopTime
+                    );
+                    
+                    // Apply the data if available
+                    if (ephemerisData && ephemerisData.position) {
+                        console.log(`Updating position for ${body.name}`);
+                        
+                        // Update position
+                        body.position = {
+                            x: ephemerisData.position.x,
+                            y: ephemerisData.position.y
+                        };
+                        
+                        // Update velocity if available
+                        if (ephemerisData.velocity) {
+                            body.velocity = {
+                                x: ephemerisData.velocity.x,
+                                y: ephemerisData.velocity.y
+                            };
+                        }
+                    }
+                }
+            }
+            
+            console.log("Celestial body update complete");
+        } catch (error) {
+            console.error("Error updating celestial bodies from NASA:", error);
+        }
+    }
+    
+    /**
+     * Fetch and update textures for celestial bodies
+     */
+    async updateCelestialBodyTextures() {
+        if (!this.useRealData || !this.nasaApiService) {
+            return;
+        }
+        
+        try {
+            for (const body of this.celestialBodies) {
+                // Fetch image for this body
+                const images = await this.nasaApiService.fetchCelestialBodyImages(body.name, 1);
+                
+                if (images && images.length > 0) {
+                    body.texture = images[0].url;
+                    console.log(`Updated texture for ${body.name}`);
+                }
+            }
+        } catch (error) {
+            console.error("Error updating celestial body textures:", error);
+        }
     }
 
     /**

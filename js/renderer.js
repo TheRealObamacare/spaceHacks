@@ -34,8 +34,59 @@ class Renderer {
         this.trailFadeTime = 5; // Seconds for trail to fade out
         this.frameCount = 0;
         
+        // Texture loading
+        this.textures = new Map(); // Map to store loaded textures
+        this.loadDefaultTextures();
+        
         // Bind resize handler
         window.addEventListener('resize', () => this.resize());
+    }
+    
+    /**
+     * Load default textures for celestial bodies
+     */
+    loadDefaultTextures() {
+        // Create default textures for Earth and Moon
+        const defaultTextures = [
+            { name: 'Earth', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/The_Blue_Marble_%28remastered%29.jpg/240px-The_Blue_Marble_%28remastered%29.jpg' },
+            { name: 'Moon', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/FullMoon2010.jpg/240px-FullMoon2010.jpg' }
+        ];
+        
+        for (const texture of defaultTextures) {
+            this.loadTexture(texture.name, texture.url);
+        }
+    }
+    
+    /**
+     * Load a texture from URL
+     * 
+     * @param {string} name - Name of the celestial body
+     * @param {string} url - URL of the texture image
+     */
+    loadTexture(name, url) {
+        const image = new Image();
+        image.src = url;
+        image.onload = () => {
+            console.log(`Texture loaded for ${name}`);
+            this.textures.set(name, image);
+        };
+        image.onerror = () => {
+            console.error(`Failed to load texture for ${name}`);
+        };
+    }
+    
+    /**
+     * Update textures from celestial body data
+     * 
+     * @param {Array} celestialBodies - Array of celestial bodies
+     */
+    updateTextures(celestialBodies) {
+        for (const body of celestialBodies) {
+            // If the body has a texture URL, load it if not already loaded
+            if (body.texture && (!this.textures.has(body.name) || this.textures.get(body.name).src !== body.texture)) {
+                this.loadTexture(body.name, body.texture);
+            }
+        }
     }
     
     /**
@@ -110,6 +161,38 @@ class Renderer {
     }
     
     /**
+     * Draw stars in the background
+     */
+    drawStars() {
+        // Create a starfield if not already created
+        if (!this.stars) {
+            this.stars = [];
+            const starCount = 200;
+            
+            for (let i = 0; i < starCount; i++) {
+                this.stars.push({
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    size: Math.random() * 2 + 0.5,
+                    brightness: Math.random() * 0.5 + 0.5
+                });
+            }
+        }
+        
+        // Draw stars
+        for (const star of this.stars) {
+            // Flicker effect
+            const flicker = Math.sin(this.frameCount * 0.05 + star.x * 0.01) * 0.2 + 0.8;
+            const brightness = star.brightness * flicker;
+            
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+            this.ctx.beginPath();
+            this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+    
+    /**
      * Draw celestial body (planet, moon, etc.)
      * 
      * @param {Object} body - Celestial body object
@@ -129,8 +212,38 @@ class Renderer {
         // Draw body
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
-        this.ctx.fillStyle = body.color;
-        this.ctx.fill();
+        
+        // Use texture if available, otherwise use solid color
+        if (this.textures.has(body.name)) {
+            const texture = this.textures.get(body.name);
+            
+            // Create pattern from texture
+            try {
+                const pattern = this.ctx.createPattern(texture, 'no-repeat');
+                this.ctx.save();
+                
+                // Set up clipping region
+                this.ctx.clip();
+                
+                // Calculate scale to fit texture in circle
+                const scale = screenRadius * 2 / Math.min(texture.width, texture.height);
+                
+                // Draw texture centered on body
+                this.ctx.translate(screenPos.x, screenPos.y);
+                this.ctx.scale(scale, scale);
+                this.ctx.translate(-texture.width / 2, -texture.height / 2);
+                this.ctx.drawImage(texture, 0, 0);
+                
+                this.ctx.restore();
+            } catch (error) {
+                console.warn(`Failed to draw texture for ${body.name}:`, error);
+                this.ctx.fillStyle = body.color;
+                this.ctx.fill();
+            }
+        } else {
+            this.ctx.fillStyle = body.color;
+            this.ctx.fill();
+        }
         
         // Draw body name
         this.ctx.fillStyle = '#FFFFFF';
@@ -378,16 +491,91 @@ class Renderer {
     }
     
     /**
+     * Draw the simulation boundary
+     * 
+     * @param {number} boundaryRadius - Radius of the boundary in meters
+     */
+    drawBoundary(boundaryRadius) {
+        // Convert boundary radius to screen coordinates
+        const screenRadius = boundaryRadius * this.scale;
+        const centerX = this.canvas.width / 2 - this.cameraOffset.x * this.scale;
+        const centerY = this.canvas.height / 2 - this.cameraOffset.y * this.scale;
+        
+        // Check if boundary is visible on screen (at least partially)
+        if (centerX + screenRadius < 0 || 
+            centerX - screenRadius > this.canvas.width ||
+            centerY + screenRadius < 0 || 
+            centerY - screenRadius > this.canvas.height) {
+            return;
+        }
+        
+        // Draw boundary circle
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, screenRadius, 0, Math.PI * 2);
+        
+        // Create gradient for boundary
+        const gradient = this.ctx.createRadialGradient(
+            centerX, centerY, screenRadius * 0.95,
+            centerX, centerY, screenRadius
+        );
+        gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
+        gradient.addColorStop(1, 'rgba(255, 0, 0, 0.3)');
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.fill();
+        
+        // Draw dashed boundary line
+        this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([15, 10]);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]); // Reset line dash
+        
+        // Draw "BOUNDARY" text at cardinal points
+        this.ctx.font = '14px Arial';
+        this.ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        
+        const padding = 30; // Padding from boundary line
+        
+        // North
+        this.ctx.fillText('BOUNDARY', centerX, centerY - screenRadius - padding);
+        
+        // East
+        this.ctx.fillText('BOUNDARY', centerX + screenRadius + padding, centerY);
+        
+        // South
+        this.ctx.fillText('BOUNDARY', centerX, centerY + screenRadius + padding);
+        
+        // West
+        this.ctx.fillText('BOUNDARY', centerX - screenRadius - padding, centerY);
+    }
+    
+    /**
      * Render the entire scene
      * 
      * @param {Object} simulation - Simulation state object
      */
     render(simulation) {
         this.clear();
+        
+        // Draw stars in the background
+        this.drawStars();
+        
+        // Draw coordinate grid
         this.drawGrid();
         
         // Update camera to follow spacecraft
         this.updateCamera(simulation.spacecraft);
+        
+        // Update textures if any new ones are available
+        this.updateTextures(simulation.physicsEngine.celestialBodies);
+        
+        // Draw boundary
+        if (simulation.boundaryRadius) {
+            this.drawBoundary(simulation.boundaryRadius);
+        }
         
         // Draw celestial bodies
         for (const body of simulation.physicsEngine.celestialBodies) {

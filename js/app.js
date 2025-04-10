@@ -1,247 +1,427 @@
 /**
  * Main Application Module
  * 
- * Initializes the simulation and handles user interaction
+ * Initializes and coordinates the space simulation
  */
 
-// Wait for DOM to load
-document.addEventListener('DOMContentLoaded', () => {
-    // Create simulation instance
-    const simulation = new Simulation();
+// Import Config
+const config = config || {};
+
+let simulation;
+let renderer;
+let uiController;
+let gameLoop;
+let isSimulationRunning = false;
+
+/**
+ * Initialize the application and set up event listeners
+ */
+function initApp() {
+    console.log('Initializing Space Flight Simulator app...');
     
-    // Set up UI event listeners
-    const startButton = document.getElementById('start-btn');
-    const resetButton = document.getElementById('reset-btn');
-    const helpButton = document.getElementById('help-btn');
-    
-    // Start/pause simulation
-    startButton.addEventListener('click', () => {
-        simulation.start();
-    });
-    
-    // Reset simulation
-    resetButton.addEventListener('click', () => {
-        simulation.reset();
-    });
-    
-    // Show help/tutorial
-    helpButton.addEventListener('click', () => {
-        simulation.showTutorial();
-    });
-    
-    // Handle keyboard input
-    document.addEventListener('keydown', (event) => {
-        handleKeyboardInput(event.key.toLowerCase(), true);
-    });
-    
-    document.addEventListener('keyup', (event) => {
-        handleKeyboardInput(event.key.toLowerCase(), false);
-    });
-    
-    function handleKeyboardInput(key, isKeyDown) {
-        // Control the spacecraft
-        simulation.handleInput(key, isKeyDown);
+    try {
+        // Initialize NasaApiService if available
+        const nasaApiService = window.NasaApiService ? new NasaApiService() : null;
         
-        // Other keyboard controls
-        if (isKeyDown) {
-            switch (key) {
-                case ' ':
-                    simulation.start(); // Space bar toggles pause/resume
-                    break;
-                case 'r':
-                    simulation.reset(); // R resets simulation
-                    break;
-                case 'h':
-                    simulation.showTutorial(); // H shows help
-                    break;
-                case '1':
-                    simulation.setTimeScale(0.5); // Slow time
-                    break;
-                case '2':
-                    simulation.setTimeScale(1.0); // Normal time
-                    break;
-                case '3':
-                    simulation.setTimeScale(2.0); // Fast time
-                    break;
-                case '4':
-                    simulation.setTimeScale(5.0); // Very fast time
-                    break;
-                case '5':
-                    simulation.setTimeScale(10.0); // Super fast time
-                    break;
+        // Create physics engine
+        const physicsEngine = new PhysicsEngine();
+        if (nasaApiService) {
+            physicsEngine.initializeApiService(nasaApiService);
+            
+            // Try to use real data if possible
+            physicsEngine.setUseRealData(true);
+            physicsEngine.updateCelestialBodiesFromNasa()
+                .then(() => {
+                    console.log('Using real ephemeris data from NASA');
+                })
+                .catch(error => {
+                    console.warn('Could not load NASA data, using simulated data:', error);
+                    physicsEngine.setUseRealData(false);
+                });
+        }
+        
+        // Create spacecraft
+        const spacecraft = new Spacecraft({
+            position: { x: 0, y: 8371000 }, // Initial orbit distance
+            velocity: { x: 7800, y: 0 },    // Initial orbital velocity
+            orientation: -Math.PI / 2,      // Facing upward
+            mass: 1000,                     // 1000 kg
+            color: '#FFFFFF',
+            fuelCapacity: 5000,
+            initialFuel: 5000
+        });
+        
+        // Create simulation
+        simulation = new Simulation(spacecraft, physicsEngine);
+        console.log('Simulation created successfully');
+        
+        // Create renderer
+        renderer = new Renderer('simulationCanvas');
+        console.log('Renderer created successfully');
+        
+        // Create UI controller
+        uiController = new UIController(simulation);
+        console.log('UI Controller created successfully');
+        
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Load APOD as background if NASA API is available
+        if (nasaApiService) {
+            loadAstronomyPictureOfDay();
+        }
+        
+        console.log('Application initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize application:', error);
+        document.getElementById('errorMessage').textContent = 'Failed to initialize: ' + error.message;
+        document.getElementById('errorOverlay').classList.remove('hidden');
+    }
+}
+
+/**
+ * Load Astronomy Picture of the Day from NASA API
+ */
+function loadAstronomyPictureOfDay() {
+    const nasaApiService = new NasaApiService();
+    nasaApiService.fetchAPOD()
+        .then(apodData => {
+            if (apodData && apodData.url) {
+                // Set background image for the page
+                const heroSection = document.querySelector('.hero');
+                if (heroSection) {
+                    heroSection.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url(${apodData.url})`;
+                    heroSection.style.backgroundSize = 'cover';
+                    heroSection.style.backgroundPosition = 'center';
+                    
+                    // Add APOD information
+                    const infoElement = document.createElement('div');
+                    infoElement.className = 'apod-info';
+                    infoElement.innerHTML = `
+                        <h4>NASA Astronomy Picture of the Day</h4>
+                        <p>${apodData.title}</p>
+                        <small>Image Credit: NASA</small>
+                    `;
+                    heroSection.appendChild(infoElement);
+                }
             }
+        })
+        .catch(error => {
+            console.warn('Failed to load APOD:', error);
+        });
+}
+
+/**
+ * Set up event listeners for user controls
+ */
+function setupEventListeners() {
+    // Button event listeners
+    document.getElementById('startButton').addEventListener('click', startSimulation);
+    document.getElementById('resetButton').addEventListener('click', resetSimulation);
+    document.getElementById('helpButton').addEventListener('click', showHelp);
+    
+    // Keyboard event listeners
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    // Zoom controls
+    document.getElementById('zoomIn').addEventListener('click', () => {
+        renderer.zoom(1.2);
+    });
+    
+    document.getElementById('zoomOut').addEventListener('click', () => {
+        renderer.zoom(0.8);
+    });
+    
+    // Close help dialog
+    document.getElementById('closeHelp').addEventListener('click', () => {
+        document.getElementById('helpDialog').classList.add('hidden');
+    });
+    
+    // Close error overlay
+    document.getElementById('closeError').addEventListener('click', () => {
+        document.getElementById('errorOverlay').classList.add('hidden');
+    });
+    
+    // Toggle real data button if NASA API is available
+    if (window.NasaApiService) {
+        const toggleDataBtn = document.getElementById('toggleRealData');
+        if (toggleDataBtn) {
+            toggleDataBtn.classList.remove('hidden');
+            toggleDataBtn.addEventListener('click', toggleRealData);
         }
     }
     
-    // Automatically show tutorial on first load
-    setTimeout(() => {
-        simulation.showTutorial();
-    }, 500);
-    
-    // Optional: Educational content toggle
-    let displayingDetails = false;
-    document.getElementById('physics-info').addEventListener('click', () => {
-        const principle = simulation.physicsTopics[simulation.currentTopic];
-        if (!displayingDetails) {
-            // Show detailed explanation
-            document.getElementById('physics-info').innerHTML = `
-                <h4>${principle.name}</h4>
-                <p>${principle.description}</p>
-                <p class="explanation-detail">
-                    This principle is demonstrated in the simulation as you control your spacecraft.
-                    Observe how ${
-                        principle.name === "Newton's First Law" ? 
-                            "your spacecraft continues moving even when not applying thrust." :
-                        principle.name === "Newton's Second Law" ? 
-                            "applying thrust changes your acceleration based on your spacecraft's mass." :
-                        principle.name === "Orbital Mechanics" ? 
-                            "maintaining the right velocity and distance creates a stable orbit." :
-                        principle.name === "Conservation of Momentum" ? 
-                            "your momentum is maintained unless external forces are applied." :
-                        principle.name === "Gravitational Force" ? 
-                            "gravity becomes weaker as you move further from celestial bodies."
-                    }
-                </p>
-                <p class="tip">Click to minimize</p>
-            `;
-        } else {
-            // Reset to simple display
-            document.getElementById('physics-info').innerHTML = `
-                <p>Experiment with orbital mechanics! Try to achieve a stable orbit around celestial bodies.</p>
-                <p>Current Physics Principle: <span id="current-principle">${principle.name}</span></p>
-            `;
-        }
-        displayingDetails = !displayingDetails;
-    });
-    
-    // Create mission objectives
-    const missions = [
-        {
-            name: "Achieve Stable Orbit",
-            description: "Reach a stable circular orbit around Earth.",
-            checkCompletion: () => {
-                // Get the Earth (first celestial body)
-                const earth = simulation.physicsEngine.celestialBodies[0];
-                
-                // Calculate distance to Earth center and speed
-                const dx = simulation.spacecraft.position.x - earth.position.x;
-                const dy = simulation.spacecraft.position.y - earth.position.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const speed = simulation.spacecraft.getSpeed();
-                
-                // Calculate orbital speed required for circular orbit at this distance
-                const orbitalSpeed = Math.sqrt(simulation.physicsEngine.G * earth.mass / distance);
-                
-                // Calculate relative velocity direction (to check if it's perpendicular to radius)
-                const radialDirection = {
-                    x: dx / distance,
-                    y: dy / distance
-                };
-                
-                // Dot product of velocity and radial direction (closer to 0 = more circular)
-                const dotProduct = Math.abs(
-                    simulation.spacecraft.velocity.x * radialDirection.x + 
-                    simulation.spacecraft.velocity.y * radialDirection.y
-                );
-                
-                // Speed is within 5% of required orbital speed, altitude is above 100km,
-                // and velocity is mostly perpendicular to radius (for circular orbit)
-                const speedDifference = Math.abs(speed - orbitalSpeed);
-                return speedDifference < orbitalSpeed * 0.05 && 
-                       distance - earth.radius > 100000 &&
-                       dotProduct < speed * 0.2; // Direction is within ~12 degrees of perpendicular
-            }
-        },
-        {
-            name: "Lunar Approach",
-            description: "Approach the Moon within 50,000 km.",
-            checkCompletion: () => {
-                const moon = simulation.physicsEngine.celestialBodies[1];
-                const spacecraft = simulation.spacecraft;
-                const dx = spacecraft.position.x - moon.position.x;
-                const dy = spacecraft.position.y - moon.position.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                return distance < 50000000; // 50,000 km in meters
-            }
-        }
-    ];
-    
-    // Add mission objective checking to the game loop
-    let activeMission = 0;
-    let missionCompleted = false;
-    
-    // Add a mission objective display to the DOM
-    const controlPanel = document.querySelector('.control-panel');
-    const missionSection = document.createElement('div');
-    missionSection.className = 'panel-section';
-    missionSection.innerHTML = `
-        <h3>Mission Objective</h3>
-        <div id="mission-objective" class="info-box">
-            <p id="mission-name">${missions[activeMission].name}</p>
-            <p id="mission-description">${missions[activeMission].description}</p>
-            <p id="mission-status">Status: In Progress</p>
-        </div>
-    `;
-    controlPanel.appendChild(missionSection);
-    
-    // Check mission completion periodically
-    setInterval(() => {
-        if (!simulation.isRunning || simulation.isPaused || missionCompleted) return;
-        
-        if (missions[activeMission].checkCompletion()) {
-            // Mission completed
-            document.getElementById('mission-status').textContent = 'Status: Completed!';
-            document.getElementById('mission-status').style.color = 'var(--success-color)';
-            
-            missionCompleted = true;
-            
-            // Show mission completion modal
-            const modal = document.getElementById('modal');
-            const modalContent = document.getElementById('modal-content');
-            
-            modalContent.innerHTML = `
-                <h2>Mission Complete!</h2>
-                <p>You have successfully completed the mission: ${missions[activeMission].name}</p>
-                <p>This demonstrates your understanding of orbital mechanics and spacecraft control.</p>
-                <p>Ready for the next challenge?</p>
-                <button id="next-mission-btn" class="primary-btn">Next Mission</button>
-            `;
-            
-            modal.style.display = 'block';
-            
-            // Set up next mission button
-            const nextMissionBtn = document.getElementById('next-mission-btn');
-            nextMissionBtn.addEventListener('click', () => {
-                activeMission = (activeMission + 1) % missions.length;
-                document.getElementById('mission-name').textContent = missions[activeMission].name;
-                document.getElementById('mission-description').textContent = missions[activeMission].description;
-                document.getElementById('mission-status').textContent = 'Status: In Progress';
-                document.getElementById('mission-status').style.color = 'var(--text-light)';
-                missionCompleted = false;
-                modal.style.display = 'none';
-            });
-        }
-    }, 1000); // Check every second
-});
+    console.log('Event listeners set up');
+}
 
-// Add event listeners for close buttons
-document.addEventListener('DOMContentLoaded', () => {
-    // Close modal when clicking on x
-    const closeButtons = document.querySelectorAll('.close');
-    closeButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const modal = button.closest('.modal');
-            if (modal) modal.style.display = 'none';
-        });
-    });
+/**
+ * Toggle between real NASA data and simulated data
+ */
+function toggleRealData() {
+    if (!simulation || !simulation.physicsEngine) return;
     
-    // Close modal when clicking outside of it
-    window.addEventListener('click', (event) => {
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            if (event.target === modal) {
-                modal.style.display = 'none';
-            }
+    simulation.physicsEngine.useRealData = !simulation.physicsEngine.useRealData;
+    
+    if (simulation.physicsEngine.useRealData) {
+        simulation.physicsEngine.updateCelestialBodiesFromNasa()
+            .then(() => {
+                alert('Now using real NASA ephemeris data');
+            })
+            .catch(() => {
+                simulation.physicsEngine.useRealData = false;
+                alert('Failed to load NASA data, reverting to simulated data');
+            });
+    } else {
+        // Reset to default positions
+        simulation.physicsEngine.resetCelestialBodies();
+        alert('Now using simulated data');
+    }
+}
+
+/**
+ * Start or pause the simulation
+ */
+function startSimulation() {
+    console.log('Start button clicked');
+    
+    if (!simulation) {
+        console.error('Simulation not initialized');
+        return;
+    }
+    
+    try {
+        if (isSimulationRunning) {
+            pauseSimulation();
+        } else {
+            // Start simulation
+            console.log('Starting simulation...');
+            simulation.start();
+            
+            // Start the game loop
+            gameLoop = requestAnimationFrame(update);
+            isSimulationRunning = true;
+            
+            // Update button text
+            document.getElementById('startButton').textContent = 'Pause';
+            console.log('Simulation started successfully');
+        }
+    } catch (error) {
+        console.error('Failed to start simulation:', error);
+        document.getElementById('errorMessage').textContent = 'Failed to start: ' + error.message;
+        document.getElementById('errorOverlay').classList.remove('hidden');
+    }
+}
+
+/**
+ * Pause the simulation
+ */
+function pauseSimulation() {
+    console.log('Pausing simulation...');
+    
+    if (!simulation) return;
+    
+    simulation.pause();
+    cancelAnimationFrame(gameLoop);
+    isSimulationRunning = false;
+    
+    // Update button text
+    document.getElementById('startButton').textContent = 'Resume';
+    console.log('Simulation paused');
+}
+
+/**
+ * Reset the simulation to initial state
+ */
+function resetSimulation() {
+    console.log('Resetting simulation...');
+    
+    if (!simulation) return;
+    
+    // Cancel current game loop
+    if (isSimulationRunning) {
+        cancelAnimationFrame(gameLoop);
+        isSimulationRunning = false;
+    }
+    
+    // Reset simulation state
+    simulation.reset();
+    
+    // Reset renderer
+    renderer.resetTrail();
+    renderer.setScale(1e-5);
+    
+    // Update UI
+    uiController.updateUI();
+    
+    // Update button text
+    document.getElementById('startButton').textContent = 'Start';
+    
+    // Render initial state
+    renderer.render(simulation);
+    
+    console.log('Simulation reset complete');
+}
+
+/**
+ * Show help dialog
+ */
+function showHelp() {
+    document.getElementById('helpDialog').classList.remove('hidden');
+}
+
+/**
+ * Handle keyboard key down events
+ * 
+ * @param {KeyboardEvent} event - The keyboard event
+ */
+function handleKeyDown(event) {
+    if (!simulation) return;
+    
+    handleKeyboardInput(event.key.toLowerCase(), true);
+    
+    // Special keys
+    if (event.key === ' ') {
+        // Space bar toggles pause/resume
+        if (isSimulationRunning) {
+            pauseSimulation();
+        } else {
+            startSimulation();
+        }
+    } else if (event.key === 'r') {
+        // 'R' key resets the simulation
+        resetSimulation();
+    } else if (event.key === 'f') {
+        // 'F' key toggles follow mode
+        renderer.toggleFollow();
+    } else if (event.key === '+' || event.key === '=') {
+        // '+' key zooms in
+        renderer.zoom(1.2);
+    } else if (event.key === '-' || event.key === '_') {
+        // '-' key zooms out
+        renderer.zoom(0.8);
+    } else if (event.key === 't') {
+        // 'T' key adjusts time scale
+        const newTimeScale = simulation.timeScale === 1 ? 5 : 
+                            simulation.timeScale === 5 ? 10 : 1;
+        simulation.setTimeScale(newTimeScale);
+        
+        // Show time scale notification
+        const notification = document.getElementById('notification');
+        notification.textContent = `Time Scale: ${newTimeScale}x`;
+        notification.classList.remove('hidden');
+        
+        // Hide notification after 2 seconds
+        setTimeout(() => {
+            notification.classList.add('hidden');
+        }, 2000);
+    }
+}
+
+/**
+ * Handle keyboard key up events
+ * 
+ * @param {KeyboardEvent} event - The keyboard event
+ */
+function handleKeyUp(event) {
+    if (!simulation) return;
+    
+    handleKeyboardInput(event.key.toLowerCase(), false);
+}
+
+/**
+ * Process keyboard input for spacecraft controls
+ * 
+ * @param {string} key - The key that was pressed
+ * @param {boolean} isKeyDown - Whether the key was pressed down or released
+ */
+function handleKeyboardInput(key, isKeyDown) {
+    simulation.handleInput(key, isKeyDown);
+}
+
+/**
+ * Main update loop
+ */
+function update() {
+    if (!simulation || !renderer) return;
+    
+    // Update simulation state
+    simulation.update();
+    
+    // Update UI
+    uiController.updateUI();
+    
+    // Render current state
+    renderer.render(simulation);
+    
+    // Check for mission completion
+    checkMissionCompletion();
+    
+    // Continue loop if simulation is running
+    if (isSimulationRunning) {
+        gameLoop = requestAnimationFrame(update);
+    }
+}
+
+/**
+ * Check if mission objectives are complete
+ */
+function checkMissionCompletion() {
+    if (!simulation || !simulation.spacecraft || simulation.spacecraft.isDestroyed) return;
+    
+    const missionStatus = simulation.checkMissionStatus();
+    
+    if (missionStatus.completed && !missionStatus.alreadyCompleted) {
+        // Pause simulation
+        if (isSimulationRunning) {
+            pauseSimulation();
+        }
+        
+        // Show completion message
+        const message = document.getElementById('completionMessage');
+        message.innerHTML = `
+            <h2>Mission Complete!</h2>
+            <p>${missionStatus.message}</p>
+            <p>You used ${Math.round((simulation.spacecraft.fuelCapacity - simulation.spacecraft.currentFuel) * 10) / 10} units of fuel.</p>
+            <p>Total mission time: ${Math.round(simulation.elapsedTime)} seconds</p>
+            <div class="mission-stats">
+                <div class="stat">
+                    <span class="stat-value">${Math.round(missionStatus.score)}</span>
+                    <span class="stat-label">Score</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${missionStatus.grade}</span>
+                    <span class="stat-label">Grade</span>
+                </div>
+            </div>
+            <button id="nextMissionButton">Next Mission</button>
+            <button id="replayMissionButton">Try Again</button>
+        `;
+        
+        document.getElementById('completionOverlay').classList.remove('hidden');
+        
+        // Set up event listeners for completion buttons
+        document.getElementById('nextMissionButton').addEventListener('click', () => {
+            document.getElementById('completionOverlay').classList.add('hidden');
+            simulation.advanceMission();
+            resetSimulation();
         });
-    });
-}); 
+        
+        document.getElementById('replayMissionButton').addEventListener('click', () => {
+            document.getElementById('completionOverlay').classList.add('hidden');
+            resetSimulation();
+        });
+    }
+}
+
+// Initialize when the document is fully loaded
+document.addEventListener('DOMContentLoaded', initApp);
+
+// Export relevant modules for testing
+if (typeof module !== 'undefined') {
+    module.exports = {
+        initApp,
+        startSimulation,
+        resetSimulation
+    };
+} 

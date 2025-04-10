@@ -7,97 +7,125 @@
 
 class Simulation {
     constructor() {
-        // Create physics engine
-        this.physicsEngine = new PhysicsEngine();
-        
-        // Create spacecraft
-        this.spacecraft = new Spacecraft({
-            // Position spacecraft in a stable orbit around Earth
-            position: { x: 0, y: 8371000 }, // 2000km above Earth surface
-            velocity: { x: 7800, y: 0 }     // Initial orbital velocity (m/s)
-        });
-        
-        // Create renderer after DOM is loaded
-        if (document.readyState === 'complete') {
-            this.initializeRenderer();
-        } else {
-            window.addEventListener('load', () => this.initializeRenderer());
-        }
-        
-        // Simulation properties
-        this.isRunning = false;
-        this.lastFrameTime = 0;
-        this.elapsedTime = 0;
-        this.timeScale = 1.0;
-        this.isPaused = false;
-        this.predictedPath = []; // Store predicted trajectory points
-        this.predictionSteps = 300; // Number of steps to predict ahead
-        this.predictionTimeStep = 0.1; // Time step for prediction in seconds
-        
-        // Educational content
-        this.physicsTopics = [
-            {
-                name: "Newton's First Law",
-                description: "Objects in motion stay in motion unless acted upon by an external force."
-            },
-            {
-                name: "Newton's Second Law",
-                description: "F = ma: Force equals mass times acceleration."
-            },
-            {
-                name: "Orbital Mechanics",
-                description: "Balancing gravity with velocity creates stable orbits."
-            },
-            {
-                name: "Conservation of Momentum",
-                description: "In the absence of external forces, momentum is conserved."
-            },
-            {
-                name: "Gravitational Force",
-                description: "Gravity is proportional to mass and inversely proportional to distance squared."
+        console.log("Initializing simulation...");
+        try {
+            // Create physics engine
+            this.physicsEngine = new PhysicsEngine();
+            
+            // Create spacecraft
+            this.spacecraft = new Spacecraft({
+                // Position spacecraft in a stable orbit around Earth
+                position: { x: 0, y: 8371000 }, // 2000km above Earth surface
+                velocity: { x: 7800, y: 0 }     // Initial orbital velocity (m/s)
+            });
+            
+            // Create renderer after DOM is loaded
+            if (document.readyState === 'complete') {
+                this.initializeRenderer();
+            } else {
+                window.addEventListener('load', () => this.initializeRenderer());
             }
-        ];
-        this.currentTopic = 0;
-        this.topicChangeInterval = 30000; // Change topics every 30 seconds
-        this.lastTopicChange = 0;
+            
+            // Simulation properties
+            this.isRunning = false;
+            this.lastFrameTime = 0;
+            this.elapsedTime = 0;
+            this.timeScale = 1.0;
+            this.isPaused = false;
+            this.predictedPath = []; // Store predicted trajectory points
+            this.predictionSteps = 300; // Number of steps to predict ahead
+            this.predictionTimeStep = 0.1; // Time step for prediction in seconds
+            
+            // Boundary and countdown properties
+            this.boundaryRadius = config.BOUNDARY_RADIUS || 50000000000; // 50 million km default
+            this.outsideBoundary = false;
+            this.boundaryCountdown = 30; // 30 seconds countdown when outside boundary
+            this.countdownActive = false;
+            this.outOfBoundsTime = 0;
+            
+            // Educational content
+            this.physicsTopics = [
+                {
+                    name: "Newton's First Law",
+                    description: "Objects in motion stay in motion unless acted upon by an external force."
+                },
+                {
+                    name: "Newton's Second Law",
+                    description: "F = ma: Force equals mass times acceleration."
+                },
+                {
+                    name: "Orbital Mechanics",
+                    description: "Balancing gravity with velocity creates stable orbits."
+                },
+                {
+                    name: "Conservation of Momentum",
+                    description: "In the absence of external forces, momentum is conserved."
+                },
+                {
+                    name: "Gravitational Force",
+                    description: "Gravity is proportional to mass and inversely proportional to distance squared."
+                }
+            ];
+            this.currentTopic = 0;
+            this.topicChangeInterval = 30000; // Change topics every 30 seconds
+            this.lastTopicChange = 0;
+            
+            console.log("Simulation initialized successfully");
+        } catch (error) {
+            console.error("Error initializing simulation:", error);
+        }
     }
     
     /**
      * Initialize the renderer
      */
     initializeRenderer() {
-        this.renderer = new Renderer('space-canvas');
-        
-        // Initialize the UI values immediately
-        this.updateUI();
+        try {
+            console.log("Initializing renderer...");
+            this.renderer = new Renderer('space-canvas');
+            
+            // Initialize the UI values immediately
+            this.updateUI();
+            console.log("Renderer initialized successfully");
+        } catch (error) {
+            console.error("Error initializing renderer:", error);
+        }
     }
     
     /**
      * Start the simulation loop
      */
     start() {
-        if (!this.isRunning) {
-            this.isRunning = true;
-            this.isPaused = false;
-            this.lastFrameTime = performance.now();
-            this.lastTopicChange = this.lastFrameTime;
-            
-            // Start the animation loop
-            requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
-            
-            // Update UI
-            document.getElementById('start-btn').textContent = 'Pause Simulation';
-        } else {
-            this.isPaused = !this.isPaused;
-            
-            if (this.isPaused) {
-                document.getElementById('start-btn').textContent = 'Resume Simulation';
-                // Calculate trajectory prediction when paused
-                this.calculatePredictedPath();
-            } else {
+        console.log("Start button clicked. isRunning =", this.isRunning);
+        try {
+            if (!this.isRunning) {
+                this.isRunning = true;
+                this.isPaused = false;
+                this.lastFrameTime = performance.now();
+                this.lastTopicChange = this.lastFrameTime;
+                
+                // Start the animation loop
+                console.log("Starting animation loop...");
+                requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+                
+                // Update UI
                 document.getElementById('start-btn').textContent = 'Pause Simulation';
-                this.lastFrameTime = performance.now(); // Reset time to avoid large jumps
+            } else {
+                this.isPaused = !this.isPaused;
+                
+                if (this.isPaused) {
+                    console.log("Simulation paused");
+                    document.getElementById('start-btn').textContent = 'Resume Simulation';
+                    // Calculate trajectory prediction when paused
+                    this.calculatePredictedPath();
+                } else {
+                    console.log("Simulation resumed");
+                    document.getElementById('start-btn').textContent = 'Pause Simulation';
+                    this.lastFrameTime = performance.now(); // Reset time to avoid large jumps
+                }
             }
+        } catch (error) {
+            console.error("Error starting simulation:", error);
         }
     }
     
@@ -114,6 +142,16 @@ class Simulation {
         this.elapsedTime = 0;
         this.isPaused = false;
         this.predictedPath = [];
+        
+        // Reset boundary properties
+        this.countdownActive = false;
+        this.outOfBoundsTime = 0;
+        
+        // Remove any existing boundary warning
+        const warningElement = document.getElementById('boundary-warning');
+        if (warningElement) {
+            warningElement.remove();
+        }
         
         if (this.isRunning) {
             document.getElementById('start-btn').textContent = 'Pause Simulation';
@@ -217,6 +255,13 @@ class Simulation {
             // Update physics (with scaled time)
             this.physicsEngine.setTimeScale(this.timeScale);
             this.spacecraft.update(deltaTime, this.physicsEngine);
+            
+            // Check boundary status
+            if (this.checkBoundaryStatus(deltaTime)) {
+                // Simulation ended due to boundary violation
+                // Reset, but don't immediately start
+                this.isPaused = true;
+            }
             
             // Update UI elements
             this.updateUI();
@@ -383,6 +428,117 @@ class Simulation {
                 modal.style.display = 'none';
             }
         };
+    }
+    
+    /**
+     * Check if spacecraft is outside the boundary
+     * @param {number} deltaTime - Time since last check
+     * @returns {boolean} True if simulation should end due to boundary violation
+     */
+    checkBoundaryStatus(deltaTime) {
+        if (!this.spacecraft) return false;
+        
+        // Calculate distance from origin
+        const distanceFromOrigin = Math.sqrt(
+            this.spacecraft.position.x * this.spacecraft.position.x + 
+            this.spacecraft.position.y * this.spacecraft.position.y
+        );
+        
+        // Check if spacecraft is outside boundary
+        const isOutsideBoundary = distanceFromOrigin > this.boundaryRadius;
+        
+        // If outside boundary, start or continue countdown
+        if (isOutsideBoundary) {
+            if (!this.countdownActive) {
+                this.countdownActive = true;
+                this.outOfBoundsTime = 0;
+                console.log("Spacecraft outside boundary! Starting countdown...");
+                
+                // Display warning
+                const warningElement = document.createElement('div');
+                warningElement.id = 'boundary-warning';
+                warningElement.className = 'boundary-warning';
+                warningElement.innerHTML = `
+                    <div class="warning-content">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Warning: Outside simulation boundary!</span>
+                        <div id="boundary-countdown">Return within ${Math.ceil(this.boundaryCountdown)}s</div>
+                    </div>
+                `;
+                
+                // Remove any existing warning
+                const existingWarning = document.getElementById('boundary-warning');
+                if (existingWarning) {
+                    existingWarning.remove();
+                }
+                
+                // Add to DOM
+                document.body.appendChild(warningElement);
+            }
+            
+            // Update countdown
+            this.outOfBoundsTime += deltaTime;
+            
+            // Update countdown display
+            const countdownDisplay = document.getElementById('boundary-countdown');
+            if (countdownDisplay) {
+                const remainingTime = Math.max(0, Math.ceil(this.boundaryCountdown - this.outOfBoundsTime));
+                countdownDisplay.textContent = `Return within ${remainingTime}s`;
+            }
+            
+            // Check if countdown has expired
+            if (this.outOfBoundsTime >= this.boundaryCountdown) {
+                console.log("Boundary violation! Ending simulation...");
+                this.endSimulationDueToBoundaryViolation();
+                return true;
+            }
+        } else if (this.countdownActive) {
+            // Spacecraft returned within boundary, cancel countdown
+            this.countdownActive = false;
+            this.outOfBoundsTime = 0;
+            console.log("Spacecraft returned within boundary. Countdown canceled.");
+            
+            // Remove warning
+            const warningElement = document.getElementById('boundary-warning');
+            if (warningElement) {
+                warningElement.remove();
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * End simulation due to boundary violation
+     */
+    endSimulationDueToBoundaryViolation() {
+        // Pause the simulation
+        this.isPaused = true;
+        
+        // Create a modal dialog for the boundary violation
+        const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modal-content');
+        
+        // Set modal content
+        modalContent.innerHTML = `
+            <h2>Simulation Terminated</h2>
+            <p>Your spacecraft has traveled too far from the designated simulation boundaries.</p>
+            <p>The simulation has been terminated for performance and stability reasons.</p>
+            <p>In a real space mission, traveling beyond planned boundaries could result in:</p>
+            <ul>
+                <li>Communication issues with mission control</li>
+                <li>Inability to return to the planned mission area</li>
+                <li>Exposure to unpredictable gravitational influences</li>
+                <li>Fuel depletion with no recovery options</li>
+            </ul>
+            <p>Click the Reset button to start a new simulation.</p>
+        `;
+        
+        // Show the modal
+        modal.style.display = 'block';
+        
+        // Update button text
+        document.getElementById('start-btn').textContent = 'Start Simulation';
     }
 }
 
