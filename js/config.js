@@ -6,7 +6,7 @@
 
 const config = {
     // NASA API key (replace with your own from https://api.nasa.gov/)
-    NASA_API_KEY: 'DEMO_KEY',
+    NASA_API_KEY: 'r3UBVVstsuMcytaZ3jOYycWFtwKcLHwrVA2KXcgF',
     
     // Simulation parameters
     SIM_TIMESTEP: 0.05,
