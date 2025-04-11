@@ -10,36 +10,55 @@
 
 class Renderer {
     constructor(canvasId) {
-        // Canvas setup
-        this.canvas = document.getElementById(canvasId);
-        this.ctx = this.canvas.getContext('2d');
-        this.resize();
-        
-        // Camera properties
-        this.scale = 1e-5; // Meters to pixels conversion
-        this.cameraOffset = { x: 0, y: 0 };
-        this.followSpacecraft = true;
-        
-        // Visual properties
-        this.backgroundColor = '#000000';
-        this.gridColor = '#1A1A1A';
-        this.thrustColor = '#FFA500';
-        
-        // Spacecraft trail
-        this.maxTrailPoints = 200;
-        this.trailPoints = [];
-        this.trailColors = []; // Store colors for each trail point
-        
-        // Animation properties
-        this.trailFadeTime = 5; // Seconds for trail to fade out
-        this.frameCount = 0;
-        
-        // Texture loading
-        this.textures = new Map(); // Map to store loaded textures
-        this.loadDefaultTextures();
-        
-        // Bind resize handler
-        window.addEventListener('resize', () => this.resize());
+        try {
+            // Canvas setup
+            this.canvasId = canvasId;
+            this.canvas = document.getElementById(canvasId);
+            
+            if (!this.canvas) {
+                throw new Error(`Canvas element with ID "${canvasId}" not found`);
+            }
+            
+            this.ctx = this.canvas.getContext('2d');
+            
+            if (!this.ctx) {
+                throw new Error('Failed to get 2D context from canvas');
+            }
+            
+            console.log(`Canvas dimensions: ${this.canvas.width}x${this.canvas.height}`);
+            this.resize(); // Set initial dimensions
+            
+            // Camera properties
+            this.scale = 1e-5; // Meters to pixels conversion
+            this.cameraOffset = { x: 0, y: 0 };
+            this.followSpacecraft = true;
+            
+            // Visual properties
+            this.backgroundColor = '#000000';
+            this.gridColor = '#1A1A1A';
+            this.thrustColor = '#FFA500';
+            
+            // Spacecraft trail
+            this.maxTrailPoints = 200;
+            this.trailPoints = [];
+            this.trailColors = []; // Store colors for each trail point
+            
+            // Animation properties
+            this.trailFadeTime = 5; // Seconds for trail to fade out
+            this.frameCount = 0;
+            
+            // Texture loading
+            this.textures = new Map(); // Map to store loaded textures
+            this.loadDefaultTextures();
+            
+            // Bind resize handler
+            window.addEventListener('resize', () => this.resize());
+            
+            console.log('Renderer initialized successfully');
+        } catch (error) {
+            console.error('Error initializing renderer:', error);
+            throw error; // Re-throw to be handled by the caller
+        }
     }
     
     /**
@@ -93,9 +112,35 @@ class Renderer {
      * Resize canvas to match container dimensions
      */
     resize() {
-        const container = this.canvas.parentElement;
-        this.canvas.width = container.clientWidth;
-        this.canvas.height = container.clientHeight;
+        try {
+            if (!this.canvas) {
+                console.error('Canvas not available for resize');
+                return;
+            }
+            
+            const container = this.canvas.parentElement;
+            if (!container) {
+                console.error('Canvas parent element not found');
+                return;
+            }
+            
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            
+            // Only resize if dimensions have actually changed
+            if (this.canvas.width !== containerWidth || this.canvas.height !== containerHeight) {
+                console.log(`Resizing canvas from ${this.canvas.width}x${this.canvas.height} to ${containerWidth}x${containerHeight}`);
+                this.canvas.width = containerWidth;
+                this.canvas.height = containerHeight;
+                
+                // When resizing, we should re-render the scene immediately
+                if (this.lastRenderState) {
+                    this.render(this.lastRenderState);
+                }
+            }
+        } catch (error) {
+            console.error('Error resizing canvas:', error);
+        }
     }
     
     /**
@@ -289,54 +334,56 @@ class Renderer {
     }
     
     /**
-     * Update and manage spacecraft trail
+     * Update spacecraft trail points
      * 
      * @param {Object} spacecraft - Spacecraft object
      */
     updateTrail(spacecraft) {
-        // Frame counter for animation timing
-        this.frameCount++;
+        if (!spacecraft || spacecraft.isDestroyed) return;
         
-        // Add new trail point
-        if (this.trailPoints.length >= this.maxTrailPoints) {
-            this.trailPoints.shift();
-            this.trailColors.shift();
+        // Add new trail point every couple of frames
+        if (this.frameCount % 3 === 0) {
+            // Add current position to trail
+            this.trailPoints.push({ ...spacecraft.position });
+            
+            // Generate trail color based on spacecraft state
+            let trailColor;
+            if (spacecraft.isThrusting && spacecraft.currentFuel > 0) {
+                // Red/orange for thrust
+                trailColor = '#FF6600';
+            } else {
+                // Blue for normal movement
+                trailColor = '#00AAFF';
+            }
+            this.trailColors.push(trailColor);
+            
+            // Limit trail length
+            if (this.trailPoints.length > this.maxTrailPoints) {
+                this.trailPoints.shift();
+                this.trailColors.shift();
+            }
         }
-        
-        // Add new point to trail with a color based on thruster state
-        this.trailPoints.push({ ...spacecraft.position });
-        
-        // Generate a color for the trail point
-        let trailColor;
-        if (spacecraft.isThrusting && spacecraft.currentFuel > 0) {
-            // Create animated color for thruster trail
-            const pulseSpeed = 0.1;
-            const brightness = 0.7 + 0.3 * Math.sin(this.frameCount * pulseSpeed);
-            const r = Math.floor(255 * brightness);
-            const g = Math.floor(165 * brightness);
-            const b = Math.floor(0);
-            trailColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
-        } else {
-            // Regular trail color when not thrusting
-            trailColor = 'rgba(255, 255, 255, 0.3)';
-        }
-        
-        this.trailColors.push(trailColor);
         
         // Draw trail
         if (this.trailPoints.length > 1) {
             for (let i = 0; i < this.trailPoints.length - 1; i++) {
-                const point1 = this.worldToScreen(this.trailPoints[i]);
-                const point2 = this.worldToScreen(this.trailPoints[i + 1]);
+                const point = this.trailPoints[i];
+                const nextPoint = this.trailPoints[i + 1];
                 
-                // Calculate alpha based on age (newer points are more opaque)
-                const alpha = i / this.trailPoints.length;
+                // Calculate fade based on position in trail
+                const fadeFactor = i / this.trailPoints.length;
+                const alpha = 0.1 + fadeFactor * 0.4; // Trail gets more opaque toward the end
                 
+                // Convert world positions to screen coordinates
+                const screenPos = this.worldToScreen(point);
+                const nextScreenPos = this.worldToScreen(nextPoint);
+                
+                // Draw line segment
                 this.ctx.beginPath();
-                this.ctx.moveTo(point1.x, point1.y);
-                this.ctx.lineTo(point2.x, point2.y);
-                this.ctx.strokeStyle = this.trailColors[i];
-                this.ctx.lineWidth = 2 * (0.3 + 0.7 * alpha); // Thicker for newer points
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(nextScreenPos.x, nextScreenPos.y);
+                this.ctx.strokeStyle = this.trailColors[i].replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+                this.ctx.lineWidth = 2;
                 this.ctx.stroke();
             }
         }
@@ -558,6 +605,16 @@ class Renderer {
      * @param {Object} simulation - Simulation state object
      */
     render(simulation) {
+        // Store the simulation state for potential re-renders
+        this.lastRenderState = simulation;
+        
+        // Make sure we have valid canvas and context before rendering
+        if (!this.canvas || !this.ctx) {
+            console.error('Cannot render: canvas or context not available');
+            return;
+        }
+        
+        this.frameCount++;
         this.clear();
         
         // Draw stars in the background
@@ -567,28 +624,42 @@ class Renderer {
         this.drawGrid();
         
         // Update camera to follow spacecraft
-        this.updateCamera(simulation.spacecraft);
-        
-        // Update textures if any new ones are available
-        this.updateTextures(simulation.physicsEngine.celestialBodies);
-        
-        // Draw boundary
-        if (simulation.boundaryRadius) {
-            this.drawBoundary(simulation.boundaryRadius);
+        if (simulation.spacecraft) {
+            this.updateCamera(simulation.spacecraft);
+            
+            // Update trail for the spacecraft
+            this.updateTrail(simulation.spacecraft);
         }
         
-        // Draw celestial bodies
-        for (const body of simulation.physicsEngine.celestialBodies) {
-            this.drawCelestialBody(body);
+        // Update textures if any new ones are available
+        if (simulation.physicsEngine && simulation.physicsEngine.celestialBodies) {
+            this.updateTextures(simulation.physicsEngine.celestialBodies);
+            
+            // Draw boundary
+            if (simulation.boundaryRadius) {
+                this.drawBoundary(simulation.boundaryRadius);
+            }
+            
+            // Draw celestial bodies
+            for (const body of simulation.physicsEngine.celestialBodies) {
+                this.drawCelestialBody(body);
+            }
         }
         
         // Draw predicted path if simulation is paused
-        if (simulation.isPaused && simulation.predictedPath.length > 0) {
+        if (simulation.isPaused && simulation.predictedPath && simulation.predictedPath.length > 0) {
             this.drawPredictedPath(simulation.predictedPath);
         }
         
         // Draw spacecraft
-        this.drawSpacecraft(simulation.spacecraft);
+        if (simulation.spacecraft) {
+            this.drawSpacecraft(simulation.spacecraft);
+        }
+        
+        // Log first few frames for debugging
+        if (this.frameCount <= 5) {
+            console.log(`Render frame #${this.frameCount} complete`);
+        }
     }
 }
 

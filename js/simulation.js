@@ -82,6 +82,15 @@ class Simulation {
     initializeRenderer() {
         try {
             console.log("Initializing renderer...");
+            
+            // Make sure the canvas element exists before creating the renderer
+            const canvas = document.getElementById('space-canvas');
+            if (!canvas) {
+                console.error("Canvas element 'space-canvas' not found");
+                throw new Error("Canvas element not found");
+            }
+            
+            // Create the renderer with the correct canvas ID
             this.renderer = new Renderer('space-canvas');
             
             // Initialize the UI values immediately
@@ -89,6 +98,16 @@ class Simulation {
             console.log("Renderer initialized successfully");
         } catch (error) {
             console.error("Error initializing renderer:", error);
+            // Display error to user
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#500; color:white; padding:20px; border-radius:10px; z-index:9999; max-width:80%; text-align:center;';
+            errorDiv.innerHTML = `
+                <h3>Error Initializing Renderer</h3>
+                <p>${error.message}</p>
+                <p>Try refreshing the page or check console for details.</p>
+                <button onclick="this.parentNode.style.display='none'">Dismiss</button>
+            `;
+            document.body.appendChild(errorDiv);
         }
     }
     

@@ -301,6 +301,48 @@ main {
     margin-bottom: 0.5rem;
 }
 
+/* Physics Equations Display */
+.equation-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: var(--bg-light);
+    border-radius: 6px;
+}
+
+.equation-section h3 {
+    color: var(--accent-color);
+    margin-bottom: 10px;
+}
+
+.equation {
+    font-size: 1.5rem;
+    font-weight: 500;
+    padding: 15px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+#start-simulation-btn {
+    display: block;
+    margin: 20px auto 10px;
+    padding: 10px 20px;
+}
+
+.background-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+    pointer-events: none;
+}
+
 /* Boundary Warning */
 .boundary-warning {
     position: fixed;

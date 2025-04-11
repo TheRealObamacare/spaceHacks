@@ -92,6 +92,253 @@
                 <div id="modal-content"></div>
             </div>
         </div>
+        
+        <!-- Debug panel -->
+        <div id="debug-panel" class="debug-panel">
+            <div class="debug-header">
+                <h3>Debug Information</h3>
+                <button id="debug-toggle-btn">Hide</button>
+            </div>
+            <div id="debug-info">Loading debug info...</div>
+            <div class="debug-tools">
+                <button id="debug-check-btn" class="debug-btn">Check Console Errors</button>
+                <button id="debug-test-config-btn" class="debug-btn">Test Config</button>
+                <button id="debug-test-simulation-btn" class="debug-btn">Test Simulation</button>
+                <button id="debug-test-rendering-btn" class="debug-btn">Test Rendering</button>
+                <button id="debug-force-renderer-btn" class="debug-btn">Force Initialize Renderer</button>
+            </div>
+            
+            <script>
+                // Debug panel functionality
+                document.getElementById('debug-toggle-btn').addEventListener('click', function() {
+                    const panel = document.getElementById('debug-panel');
+                    if (panel.classList.contains('collapsed')) {
+                        panel.classList.remove('collapsed');
+                        this.textContent = 'Hide';
+                    } else {
+                        panel.classList.add('collapsed');
+                        this.textContent = 'Show';
+                    }
+                });
+                
+                // Force renderer initialization
+                document.getElementById('debug-force-renderer-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    debugInfo.innerHTML += `<div><strong>Renderer:</strong> Forcing initialization...</div>`;
+                    
+                    try {
+                        // Make sure we have a simulation
+                        if (!window.simulation) {
+                            window.simulation = new Simulation();
+                            debugInfo.innerHTML += `<div><strong>Simulation:</strong> Created new instance</div>`;
+                        }
+                        
+                        // Force initialize renderer
+                        simulation.initializeRenderer();
+                        
+                        // Validate canvas
+                        const canvas = document.getElementById('space-canvas');
+                        if (canvas) {
+                            const container = canvas.parentElement;
+                            debugInfo.innerHTML += `<div><strong>Canvas:</strong> Found with dimensions ${canvas.width}x${canvas.height}</div>`;
+                            debugInfo.innerHTML += `<div><strong>Container:</strong> Size ${container.clientWidth}x${container.clientHeight}</div>`;
+                            
+                            // Force resize
+                            if (simulation.renderer) {
+                                simulation.renderer.resize();
+                                debugInfo.innerHTML += `<div><strong>Renderer:</strong> Resize forced</div>`;
+                            }
+                        } else {
+                            debugInfo.innerHTML += `<div class="debug-error"><strong>Canvas:</strong> Not found!</div>`;
+                        }
+                        
+                        // Force render a frame
+                        if (simulation.renderer) {
+                            simulation.renderer.render(simulation);
+                            debugInfo.innerHTML += `<div><strong>Renderer:</strong> First frame rendered</div>`;
+                        }
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Renderer Error:</strong> ${error.message}</div>`;
+                    }
+                });
+                
+                // Check console errors
+                document.getElementById('debug-check-btn').addEventListener('click', function() {
+                    let errorCount = 0;
+                    let oldConsoleError = console.error;
+                    console.error = function() {
+                        errorCount++;
+                        oldConsoleError.apply(console, arguments);
+                    };
+                    
+                    try {
+                        // Force a check of all script components
+                        if (typeof config === 'undefined') {
+                            throw new Error('Config not loaded');
+                        }
+                        
+                        const debugInfo = document.getElementById('debug-info');
+                        debugInfo.innerHTML += `<div><strong>Config Check:</strong> OK</div>`;
+                        
+                        if (typeof Simulation === 'undefined') {
+                            throw new Error('Simulation class not loaded');
+                        }
+                        debugInfo.innerHTML += `<div><strong>Simulation Check:</strong> OK</div>`;
+                        
+                        if (typeof PhysicsEngine === 'undefined') {
+                            throw new Error('PhysicsEngine class not loaded');
+                        }
+                        debugInfo.innerHTML += `<div><strong>PhysicsEngine Check:</strong> OK</div>`;
+                        
+                        if (typeof Renderer === 'undefined') {
+                            throw new Error('Renderer class not loaded');
+                        }
+                        debugInfo.innerHTML += `<div><strong>Renderer Check:</strong> OK</div>`;
+                        
+                        if (typeof Spacecraft === 'undefined') {
+                            throw new Error('Spacecraft class not loaded');
+                        }
+                        debugInfo.innerHTML += `<div><strong>Spacecraft Check:</strong> OK</div>`;
+                        
+                        debugInfo.innerHTML += `<div><strong>Error Count:</strong> ${errorCount}</div>`;
+                    } catch (error) {
+                        const debugInfo = document.getElementById('debug-info');
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Error:</strong> ${error.message}</div>`;
+                    }
+                    
+                    // Restore original console.error
+                    console.error = oldConsoleError;
+                });
+                
+                // Test config
+                document.getElementById('debug-test-config-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    
+                    try {
+                        if (typeof config === 'undefined') {
+                            throw new Error('Config object not found');
+                        }
+                        
+                        // Check required config properties
+                        const requiredProps = ['G', 'SIM_TIMESTEP', 'SIM_SCALE', 'BOUNDARY_RADIUS'];
+                        const missingProps = requiredProps.filter(prop => typeof config[prop] === 'undefined');
+                        
+                        if (missingProps.length > 0) {
+                            throw new Error(`Missing config properties: ${missingProps.join(', ')}`);
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Config Test:</strong> OK - All required properties present</div>`;
+                        debugInfo.innerHTML += `<div><strong>NASA API Key:</strong> ${config.NASA_API_KEY ? 'Present' : 'Missing'}</div>`;
+                        debugInfo.innerHTML += `<div><strong>G Value:</strong> ${config.G}</div>`;
+                        debugInfo.innerHTML += `<div><strong>Time Step:</strong> ${config.SIM_TIMESTEP}</div>`;
+                        debugInfo.innerHTML += `<div><strong>Scale:</strong> ${config.SIM_SCALE}</div>`;
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Config Test Error:</strong> ${error.message}</div>`;
+                    }
+                });
+                
+                // Test simulation
+                document.getElementById('debug-test-simulation-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    
+                    try {
+                        if (typeof Simulation === 'undefined') {
+                            throw new Error('Simulation class not defined');
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Simulation Test:</strong> Creating test instance...</div>`;
+                        const testSim = new Simulation();
+                        
+                        if (!testSim) {
+                            throw new Error('Failed to create Simulation instance');
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Simulation Instance:</strong> Created successfully</div>`;
+                        
+                        // Check key properties and methods
+                        const requiredProps = ['physics', 'spacecraft', 'renderer', 'isRunning', 'isPaused'];
+                        const requiredMethods = ['start', 'reset', 'update', 'handleInput'];
+                        
+                        const missingProps = requiredProps.filter(prop => typeof testSim[prop] === 'undefined');
+                        const missingMethods = requiredMethods.filter(method => 
+                            typeof testSim[method] !== 'function');
+                        
+                        if (missingProps.length > 0) {
+                            throw new Error(`Missing properties: ${missingProps.join(', ')}`);
+                        }
+                        
+                        if (missingMethods.length > 0) {
+                            throw new Error(`Missing methods: ${missingMethods.join(', ')}`);
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Simulation Properties:</strong> All required properties present</div>`;
+                        debugInfo.innerHTML += `<div><strong>Simulation Methods:</strong> All required methods present</div>`;
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Simulation Test Error:</strong> ${error.message}</div>`;
+                    }
+                });
+                
+                // Test rendering
+                document.getElementById('debug-test-rendering-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    
+                    try {
+                        if (typeof Renderer === 'undefined') {
+                            throw new Error('Renderer class not defined');
+                        }
+                        
+                        const canvas = document.getElementById('simulation-canvas');
+                        if (!canvas) {
+                            throw new Error('Canvas element not found');
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Canvas:</strong> Found with dimensions ${canvas.width}x${canvas.height}</div>`;
+                        
+                        // Test basic canvas functionality
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) {
+                            throw new Error('Failed to get canvas 2D context');
+                        }
+                        
+                        // Try to draw something simple
+                        ctx.save();
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                        ctx.fillRect(10, 10, 100, 100);
+                        ctx.strokeStyle = 'white';
+                        ctx.strokeRect(10, 10, 100, 100);
+                        ctx.fillStyle = 'white';
+                        ctx.font = '12px Arial';
+                        ctx.fillText('Test Rendering', 15, 30);
+                        ctx.restore();
+                        
+                        debugInfo.innerHTML += `<div><strong>Rendering Test:</strong> Drew test rectangle</div>`;
+                        
+                        // Try to create a renderer
+                        debugInfo.innerHTML += `<div><strong>Renderer Test:</strong> Creating test instance...</div>`;
+                        const testRenderer = new Renderer('simulation-canvas');
+                        
+                        if (!testRenderer) {
+                            throw new Error('Failed to create Renderer instance');
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Renderer Instance:</strong> Created successfully</div>`;
+                        
+                        // Check key methods
+                        const requiredMethods = ['clear', 'drawGrid', 'drawStars', 'drawBody', 'drawSpacecraft'];
+                        const missingMethods = requiredMethods.filter(method => 
+                            typeof testRenderer[method] !== 'function');
+                        
+                        if (missingMethods.length > 0) {
+                            throw new Error(`Missing methods: ${missingMethods.join(', ')}`);
+                        }
+                        
+                        debugInfo.innerHTML += `<div><strong>Renderer Methods:</strong> All required methods present</div>`;
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Rendering Test Error:</strong> ${error.message}</div>`;
+                    }
+                });
+            </script>
+        </div>
     </div>
 
     <!-- Tutorial modal content (hidden by default) -->
@@ -127,11 +374,11 @@
     </div>
 
     <!-- JavaScript files -->
-    <script src="js/physics.js"></script>
-    <script src="js/renderer.js"></script>
-    <script src="js/spacecraft.js"></script>
     <script src="js/config.js"></script>
     <script src="js/nasaApi.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/spacecraft.js"></script>
+    <script src="js/renderer.js"></script>
     <script src="js/simulation.js"></script>
     <script src="js/app.js"></script>
 </body>
