@@ -244,57 +244,129 @@ class Renderer {
      */
     drawCelestialBody(body) {
         const screenPos = this.worldToScreen(body.position);
-        const screenRadius = body.radius * this.scale;
+        const screenRadius = Math.max(20, body.radius * this.scale); // Ensure planets are not too small
         
-        // Only draw if visible on screen
-        if (screenPos.x + screenRadius < 0 || 
-            screenPos.x - screenRadius > this.canvas.width ||
-            screenPos.y + screenRadius < 0 || 
-            screenPos.y - screenRadius > this.canvas.height) {
+        // Only draw if visible on screen with some margin
+        const margin = screenRadius * 2;
+        if (screenPos.x + margin < 0 || 
+            screenPos.x - margin > this.canvas.width ||
+            screenPos.y + margin < 0 || 
+            screenPos.y - margin > this.canvas.height) {
             return;
         }
+        
+        // Draw atmosphere glow for Earth
+        if (body.name === 'Earth') {
+            const glowRadius = screenRadius * 1.15;
+            const gradient = this.ctx.createRadialGradient(
+                screenPos.x, screenPos.y, screenRadius,
+                screenPos.x, screenPos.y, glowRadius
+            );
+            gradient.addColorStop(0, 'rgba(70, 130, 255, 0.6)');
+            gradient.addColorStop(1, 'rgba(70, 130, 255, 0)');
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        this.ctx.save();
         
         // Draw body
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         
-        // Use texture if available, otherwise use solid color
-        if (this.textures.has(body.name)) {
-            const texture = this.textures.get(body.name);
-            
-            // Create pattern from texture
+        // First fill with solid color in case texture fails
+        this.ctx.fillStyle = body.color;
+        this.ctx.fill();
+        
+        // Use texture if available
+        const textureSrc = body.texture;
+        const bodyTexture = textureSrc ? this.loadOrGetTexture(body.name, textureSrc) : null;
+        
+        if (bodyTexture && bodyTexture.complete) {
             try {
-                const pattern = this.ctx.createPattern(texture, 'no-repeat');
+                // Draw the texture
                 this.ctx.save();
                 
                 // Set up clipping region
+                this.ctx.beginPath();
+                this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
                 this.ctx.clip();
                 
                 // Calculate scale to fit texture in circle
-                const scale = screenRadius * 2 / Math.min(texture.width, texture.height);
+                const scale = screenRadius * 2 / Math.min(bodyTexture.width, bodyTexture.height);
                 
                 // Draw texture centered on body
-                this.ctx.translate(screenPos.x, screenPos.y);
-                this.ctx.scale(scale, scale);
-                this.ctx.translate(-texture.width / 2, -texture.height / 2);
-                this.ctx.drawImage(texture, 0, 0);
+                const textureX = screenPos.x - (bodyTexture.width * scale / 2);
+                const textureY = screenPos.y - (bodyTexture.height * scale / 2);
+                this.ctx.drawImage(bodyTexture, textureX, textureY, bodyTexture.width * scale, bodyTexture.height * scale);
                 
                 this.ctx.restore();
             } catch (error) {
                 console.warn(`Failed to draw texture for ${body.name}:`, error);
-                this.ctx.fillStyle = body.color;
-                this.ctx.fill();
             }
-        } else {
-            this.ctx.fillStyle = body.color;
-            this.ctx.fill();
         }
         
-        // Draw body name
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = '14px Arial';
+        // Add a subtle shading to give a 3D effect
+        const shadowGradient = this.ctx.createRadialGradient(
+            screenPos.x - screenRadius * 0.3, screenPos.y - screenRadius * 0.3, 0,
+            screenPos.x, screenPos.y, screenRadius
+        );
+        shadowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
+        shadowGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+        shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+        
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+        this.ctx.fillStyle = shadowGradient;
+        this.ctx.fill();
+        
+        // Add a thin border
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
+        
+        // Draw body name with shadow for better visibility
+        this.ctx.font = 'bold 16px Arial';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(body.name, screenPos.x, screenPos.y - screenRadius - 10);
+        
+        // Text shadow
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillText(body.name, screenPos.x + 1, screenPos.y - screenRadius - 12 + 1);
+        
+        // Actual text
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillText(body.name, screenPos.x, screenPos.y - screenRadius - 12);
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * Load or get a texture from the cache
+     * 
+     * @param {string} name - Name of the celestial body
+     * @param {string} url - URL of the texture image
+     * @returns {Image|null} - The image object or null if loading
+     */
+    loadOrGetTexture(name, url) {
+        // Check if texture is already loaded
+        if (this.textures.has(name)) {
+            const texture = this.textures.get(name);
+            // If URL has changed, reload the texture
+            if (texture.src !== url) {
+                this.loadTexture(name, url);
+                return null;
+            }
+            return texture;
+        }
+        
+        // Texture not loaded yet, start loading
+        this.loadTexture(name, url);
+        return null;
     }
     
     /**
@@ -303,12 +375,22 @@ class Renderer {
      * @param {Object} spacecraft - Spacecraft object
      */
     drawSpacecraft(spacecraft) {
-        // Update trail
-        this.updateTrail(spacecraft);
+        if (!spacecraft) {
+            console.warn("Cannot draw spacecraft: undefined");
+            return;
+        }
+        
+        // Log occasional spacecraft draws (for debugging)
+        if (window.simulation && window.simulation.frameCount % 100 === 0) {
+            console.log(`Drawing spacecraft at x=${spacecraft.position.x}, y=${spacecraft.position.y}, orientation=${spacecraft.orientation}`);
+        }
         
         // Get screen position and radius
         const screenPos = this.worldToScreen(spacecraft.position);
-        const screenRadius = Math.max(5, spacecraft.radius * this.scale);
+        
+        // Make spacecraft more visible by increasing the minimum size
+        const minRadius = 10; // Minimum radius in pixels
+        const screenRadius = Math.max(minRadius, spacecraft.radius * this.scale);
         
         // Draw thrust if spacecraft is thrusting
         if (spacecraft.isThrusting && spacecraft.currentFuel > 0) {
@@ -327,8 +409,14 @@ class Renderer {
         this.ctx.lineTo(-screenRadius, screenRadius * 0.7);
         this.ctx.closePath();
         
-        this.ctx.fillStyle = spacecraft.isDestroyed ? '#FF0000' : spacecraft.color;
+        // Fill with spacecraft color or red if destroyed
+        this.ctx.fillStyle = spacecraft.isDestroyed ? '#FF0000' : '#FFFFFF';
         this.ctx.fill();
+        
+        // Add outline for better visibility
+        this.ctx.strokeStyle = '#0088FF';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
         
         this.ctx.restore();
     }
@@ -339,10 +427,19 @@ class Renderer {
      * @param {Object} spacecraft - Spacecraft object
      */
     updateTrail(spacecraft) {
-        if (!spacecraft || spacecraft.isDestroyed) return;
+        if (!spacecraft || spacecraft.isDestroyed) {
+            return;
+        }
         
-        // Add new trail point every couple of frames
-        if (this.frameCount % 3 === 0) {
+        // Log occasional updates (for debugging)
+        if (window.simulation && window.simulation.frameCount % 100 === 0) {
+            console.log(`Updating trail - trail points: ${this.trailPoints.length}, spacecraft position: x=${spacecraft.position.x}, y=${spacecraft.position.y}`);
+        }
+        
+        // Add new trail point every few frames or based on distance moved
+        const trailUpdateInterval = 3; // Every 3 frames
+        
+        if (this.frameCount % trailUpdateInterval === 0) {
             // Add current position to trail
             this.trailPoints.push({ ...spacecraft.position });
             
@@ -378,15 +475,30 @@ class Renderer {
                 const screenPos = this.worldToScreen(point);
                 const nextScreenPos = this.worldToScreen(nextPoint);
                 
-                // Draw line segment
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(nextScreenPos.x, nextScreenPos.y);
-                this.ctx.strokeStyle = this.trailColors[i].replace(')', `, ${alpha})`).replace('rgb', 'rgba');
-                this.ctx.lineWidth = 2;
-                this.ctx.stroke();
+                // Draw line segment if it's on screen
+                if (this.isOnScreen(screenPos) || this.isOnScreen(nextScreenPos)) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(screenPos.x, screenPos.y);
+                    this.ctx.lineTo(nextScreenPos.x, nextScreenPos.y);
+                    this.ctx.strokeStyle = this.trailColors[i].replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+                    this.ctx.lineWidth = 2;
+                    this.ctx.stroke();
+                }
             }
         }
+    }
+    
+    /**
+     * Check if a screen position is visible
+     * @param {Object} screenPos - Screen position {x, y}
+     * @returns {boolean} - True if position is on screen
+     */
+    isOnScreen(screenPos) {
+        const margin = 100; // Add some margin to include points just off-screen
+        return screenPos.x >= -margin && 
+               screenPos.x <= this.canvas.width + margin && 
+               screenPos.y >= -margin && 
+               screenPos.y <= this.canvas.height + margin;
     }
     
     /**
@@ -499,9 +611,24 @@ class Renderer {
      * @param {Object} spacecraft - Spacecraft to follow
      */
     updateCamera(spacecraft) {
-        if (this.followSpacecraft) {
-            this.cameraOffset = { ...spacecraft.position };
+        // Only update if followSpacecraft is enabled
+        if (!this.followSpacecraft) return;
+        
+        if (!spacecraft) {
+            console.warn("Cannot update camera: spacecraft is undefined");
+            return;
         }
+        
+        // Log camera update (infrequently to avoid spam)
+        if (window.simulation && window.simulation.frameCount % 100 === 0) {
+            console.log(`Updating camera to follow spacecraft at x=${spacecraft.position.x}, y=${spacecraft.position.y}`);
+        }
+        
+        // Set camera offset to spacecraft position
+        this.cameraOffset = { 
+            x: spacecraft.position.x,
+            y: spacecraft.position.y
+        };
     }
     
     /**
@@ -614,7 +741,19 @@ class Renderer {
             return;
         }
         
+        // Increment frame counter
         this.frameCount++;
+        
+        // Occasionally log render information
+        if (this.frameCount % 100 === 0) {
+            console.log(`Render frame #${this.frameCount}, followSpacecraft=${this.followSpacecraft}`);
+            if (simulation.spacecraft) {
+                console.log(`Spacecraft position during render: x=${simulation.spacecraft.position.x}, y=${simulation.spacecraft.position.y}`);
+                console.log(`Camera offset: x=${this.cameraOffset.x}, y=${this.cameraOffset.y}`);
+            }
+        }
+        
+        // Clear the canvas
         this.clear();
         
         // Draw stars in the background
@@ -623,12 +762,11 @@ class Renderer {
         // Draw coordinate grid
         this.drawGrid();
         
-        // Update camera to follow spacecraft
-        if (simulation.spacecraft) {
+        // Update camera to follow spacecraft if needed
+        // Note: This shouldn't be necessary as it should be updated in updateCamera
+        // called from gameLoop, but we'll keep it for redundancy
+        if (simulation.spacecraft && this.followSpacecraft) {
             this.updateCamera(simulation.spacecraft);
-            
-            // Update trail for the spacecraft
-            this.updateTrail(simulation.spacecraft);
         }
         
         // Update textures if any new ones are available
@@ -651,6 +789,12 @@ class Renderer {
             this.drawPredictedPath(simulation.predictedPath);
         }
         
+        // Update and draw trail for spacecraft
+        // Note: updateTrail is now called directly in gameLoop, but we'll also do it here for redundancy
+        if (simulation.spacecraft && !simulation.spacecraft.isDestroyed) {
+            this.updateTrail(simulation.spacecraft);
+        }
+        
         // Draw spacecraft
         if (simulation.spacecraft) {
             this.drawSpacecraft(simulation.spacecraft);
@@ -660,6 +804,17 @@ class Renderer {
         if (this.frameCount <= 5) {
             console.log(`Render frame #${this.frameCount} complete`);
         }
+    }
+    
+    /**
+     * Draw a celestial body (planet, moon, etc.)
+     * Alias for drawCelestialBody for backward compatibility
+     * 
+     * @param {Object} body - Celestial body object
+     */
+    drawBody(body) {
+        // Forward to the correct method name
+        this.drawCelestialBody(body);
     }
 }
 

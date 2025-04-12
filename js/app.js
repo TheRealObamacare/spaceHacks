@@ -13,6 +13,35 @@ let gameLoop;
 let isSimulationRunning = false;
 let debugInfo = {};
 
+// Polyfill for requestAnimationFrame
+(function() {
+    var lastTime = 0;
+    var vendors = ['ms', 'moz', 'webkit', 'o'];
+    for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+        window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+        window.cancelAnimationFrame = window[vendors[x]+'CancelAnimationFrame'] 
+                                   || window[vendors[x]+'CancelRequestAnimationFrame'];
+    }
+ 
+    if (!window.requestAnimationFrame) {
+        console.warn("requestAnimationFrame not available, using setTimeout fallback");
+        window.requestAnimationFrame = function(callback) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+            var id = window.setTimeout(function() { callback(currTime + timeToCall); }, 
+              timeToCall);
+            lastTime = currTime + timeToCall;
+            return id;
+        };
+    }
+ 
+    if (!window.cancelAnimationFrame) {
+        window.cancelAnimationFrame = function(id) {
+            clearTimeout(id);
+        };
+    }
+}());
+
 /**
  * Initialize the application and set up event listeners
  */
@@ -55,6 +84,9 @@ function initApp() {
         updateDebugInfo('UI', 'Showing physics equations...');
         showPhysicsEquations();
         
+        // Start frame rate monitoring
+        startFrameMonitor();
+        
         updateDebugInfo('Status', 'Initialization complete');
         console.log('Application initialized successfully');
     } catch (error) {
@@ -74,6 +106,35 @@ function initApp() {
         `;
         document.body.appendChild(errorDiv);
     }
+}
+
+/**
+ * Monitor frame rate and update debug info
+ */
+function startFrameMonitor() {
+    let lastFrameCount = 0;
+    let lastFrameTime = performance.now();
+    let frameRate = 0;
+    
+    // Update frame rate every second
+    setInterval(() => {
+        if (!simulation) return;
+        
+        const currentFrameCount = simulation.frameCount || 0;
+        const currentTime = performance.now();
+        const elapsed = (currentTime - lastFrameTime) / 1000; // in seconds
+        
+        // Calculate frames per second
+        frameRate = Math.round((currentFrameCount - lastFrameCount) / elapsed);
+        
+        // Update debug info
+        updateDebugInfo('Frame Rate', `${frameRate} FPS`);
+        updateDebugInfo('Frames', currentFrameCount);
+        
+        // Store values for next calculation
+        lastFrameCount = currentFrameCount;
+        lastFrameTime = currentTime;
+    }, 1000);
 }
 
 /**
@@ -261,12 +322,12 @@ function setupEventListeners() {
  * Start or pause the simulation
  */
 function startSimulation() {
-    console.log('Start button clicked');
+    console.log('Start button clicked - FIXED IMPLEMENTATION');
     updateDebugInfo('Action', 'Start button clicked');
     
     if (!simulation) {
-        console.error('Simulation not initialized, attempting to create it');
-        updateDebugInfo('Simulation', 'Creating...');
+        console.error('Simulation not initialized, creating a new simulation');
+        updateDebugInfo('Simulation', 'Creating new simulation');
         
         try {
             simulation = new Simulation();
@@ -280,32 +341,76 @@ function startSimulation() {
     }
     
     try {
-        // Check if renderer is initialized
+        // Make sure the renderer is initialized and ready
         if (!simulation.renderer) {
-            console.log('Renderer not initialized, initializing now...');
-            simulation.initializeRenderer();
+            console.log('Renderer not initialized, initializing now');
+            updateDebugInfo('Renderer', 'Initializing...');
+            
+            // Initialize the renderer
+            const rendererInitialized = simulation.initializeRenderer();
+            
+            // Check if renderer was created
+            if (!simulation.renderer || !rendererInitialized) {
+                throw new Error('Failed to initialize renderer');
+            }
+            
+            updateDebugInfo('Renderer', 'Initialized successfully');
         }
         
-        if (isSimulationRunning) {
-            // If already running, toggle pause state
-            updateDebugInfo('Simulation', 'Toggling pause state');
-            simulation.start();
-            updateDebugInfo('Simulation', simulation.isPaused ? 'Paused' : 'Resumed');
-        } else {
-            // Start simulation
-            console.log('Starting simulation...');
-            updateDebugInfo('Simulation', 'Starting...');
-            simulation.start();
-            isSimulationRunning = true;
-            updateDebugInfo('Simulation', 'Running');
-            
-            // Log simulation state for debugging
-            console.log('Simulation state:', {
-                isRunning: simulation.isRunning,
-                isPaused: simulation.isPaused,
-                renderer: simulation.renderer ? 'Initialized' : 'Not initialized'
-            });
+        // Check if the canvas exists and has context
+        const canvas = document.getElementById('space-canvas');
+        if (!canvas) {
+            throw new Error("Canvas element 'space-canvas' not found");
         }
+        
+        if (!canvas.getContext('2d')) {
+            throw new Error('Failed to get 2D context from canvas');
+        }
+        
+        // Update the canvas size to match its container
+        if (simulation.renderer) {
+            simulation.renderer.resize();
+        }
+        
+        // Log simulation state before start
+        console.log('Simulation state BEFORE start:', {
+            isRunning: simulation.isRunning,
+            isPaused: simulation.isPaused
+        });
+        
+        // Force set key values before calling start to ensure proper initialization
+        if (!simulation.isRunning) {
+            // Initialize time tracking
+            simulation.lastFrameTime = performance.now();
+            simulation.lastTopicChange = simulation.lastFrameTime;
+            simulation.frameCount = 0;
+            // We'll let simulation.start() set isRunning = true
+        }
+        
+        // Start the simulation
+        simulation.start();
+        
+        // Update tracking variables
+        isSimulationRunning = simulation.isRunning;
+        
+        // Log simulation state after start
+        console.log('Simulation state AFTER start:', {
+            isRunning: simulation.isRunning,
+            isPaused: simulation.isPaused,
+            lastFrameTime: simulation.lastFrameTime,
+            renderer: simulation.renderer ? 'Initialized' : 'Not initialized',
+            canvas: {
+                width: canvas.width,
+                height: canvas.height
+            }
+        });
+        
+        // Ensure the start button text is correct
+        document.getElementById('start-btn').textContent = 
+            simulation.isPaused ? 'Resume Simulation' : 'Pause Simulation';
+            
+        updateDebugInfo('Simulation', simulation.isPaused ? 'Paused' : 'Running');
+        
     } catch (error) {
         console.error('Failed to start simulation:', error);
         updateDebugInfo('Error', `Start failed: ${error.message}`);
@@ -396,23 +501,35 @@ function handleKeyDown(event) {
     }
     
     try {
-        updateDebugInfo('Input', `Key down: ${event.key}`);
-        simulation.handleInput(event.key.toLowerCase(), true);
+        const key = event.key.toLowerCase();
+        updateDebugInfo('Input', `Key down: ${key}`);
         
-        // Special keys
-        if (event.key === ' ') {
+        // Special keys that work even when simulation isn't running
+        if (key === ' ') {
             // Space bar toggles pause/resume
             event.preventDefault();
             startSimulation(); // This will toggle pause/resume
-        } else if (event.key === 'r') {
+            return;
+        } else if (key === 'r') {
             // 'R' key resets the simulation
             resetSimulation();
-        } else if (event.key === 'h' || event.key === '?') {
+            return;
+        } else if (key === 'h' || key === '?') {
             // 'H' key shows help
             showHelp();
-        } else if (event.key === 'p') {
+            return;
+        } else if (key === 'p') {
             // 'P' key shows physics equations
             showPhysicsEquations();
+            return;
+        }
+        
+        // Movement keys for controlling the spacecraft
+        // Only process movement keys if simulation is running and not paused
+        if (simulation.isRunning && !simulation.isPaused) {
+            simulation.handleInput(key, true);
+        } else {
+            updateDebugInfo('Input', 'Ignored (simulation paused)');
         }
     } catch (error) {
         console.error('Error handling keydown:', error);
@@ -426,11 +543,19 @@ function handleKeyDown(event) {
  * @param {KeyboardEvent} event - The keyboard event
  */
 function handleKeyUp(event) {
-    if (!simulation) return;
+    if (!simulation) {
+        updateDebugInfo('Error', 'Simulation not initialized (key up)');
+        return;
+    }
     
     try {
-        updateDebugInfo('Input', `Key up: ${event.key}`);
-        simulation.handleInput(event.key.toLowerCase(), false);
+        const key = event.key.toLowerCase();
+        updateDebugInfo('Input', `Key up: ${key}`);
+        
+        // Only process movement keys if simulation is running and not paused
+        if (simulation.isRunning && !simulation.isPaused) {
+            simulation.handleInput(key, false);
+        }
     } catch (error) {
         console.error('Error handling keyup:', error);
         updateDebugInfo('Error', `Keyboard input error: ${error.message}`);
@@ -447,4 +572,4 @@ if (typeof module !== 'undefined') {
         startSimulation,
         resetSimulation
     };
-} 
+}

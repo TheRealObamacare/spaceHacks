@@ -106,6 +106,9 @@
                 <button id="debug-test-simulation-btn" class="debug-btn">Test Simulation</button>
                 <button id="debug-test-rendering-btn" class="debug-btn">Test Rendering</button>
                 <button id="debug-force-renderer-btn" class="debug-btn">Force Initialize Renderer</button>
+                <button id="debug-force-nasa-btn" class="debug-btn">Load NASA Data & Images</button>
+                <button id="debug-force-animation-btn" class="debug-btn">Force Animation Loop</button>
+                <button id="debug-direct-start-btn" class="debug-btn">Direct Start Method</button>
             </div>
             
             <script>
@@ -256,8 +259,8 @@
                         debugInfo.innerHTML += `<div><strong>Simulation Instance:</strong> Created successfully</div>`;
                         
                         // Check key properties and methods
-                        const requiredProps = ['physics', 'spacecraft', 'renderer', 'isRunning', 'isPaused'];
-                        const requiredMethods = ['start', 'reset', 'update', 'handleInput'];
+                        const requiredProps = ['physicsEngine', 'spacecraft', 'renderer', 'isRunning', 'isPaused'];
+                        const requiredMethods = ['start', 'reset', 'updateUI', 'handleInput'];
                         
                         const missingProps = requiredProps.filter(prop => typeof testSim[prop] === 'undefined');
                         const missingMethods = requiredMethods.filter(method => 
@@ -287,7 +290,7 @@
                             throw new Error('Renderer class not defined');
                         }
                         
-                        const canvas = document.getElementById('simulation-canvas');
+                        const canvas = document.getElementById('space-canvas');
                         if (!canvas) {
                             throw new Error('Canvas element not found');
                         }
@@ -315,7 +318,7 @@
                         
                         // Try to create a renderer
                         debugInfo.innerHTML += `<div><strong>Renderer Test:</strong> Creating test instance...</div>`;
-                        const testRenderer = new Renderer('simulation-canvas');
+                        const testRenderer = new Renderer('space-canvas');
                         
                         if (!testRenderer) {
                             throw new Error('Failed to create Renderer instance');
@@ -324,7 +327,7 @@
                         debugInfo.innerHTML += `<div><strong>Renderer Instance:</strong> Created successfully</div>`;
                         
                         // Check key methods
-                        const requiredMethods = ['clear', 'drawGrid', 'drawStars', 'drawBody', 'drawSpacecraft'];
+                        const requiredMethods = ['clear', 'drawGrid', 'drawStars', 'drawCelestialBody', 'drawSpacecraft'];
                         const missingMethods = requiredMethods.filter(method => 
                             typeof testRenderer[method] !== 'function');
                         
@@ -335,6 +338,127 @@
                         debugInfo.innerHTML += `<div><strong>Renderer Methods:</strong> All required methods present</div>`;
                     } catch (error) {
                         debugInfo.innerHTML += `<div class="debug-error"><strong>Rendering Test Error:</strong> ${error.message}</div>`;
+                    }
+                });
+
+                // Force NASA API integration
+                document.getElementById('debug-force-nasa-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    debugInfo.innerHTML += `<div><strong>NASA API:</strong> Forcing integration...</div>`;
+                    
+                    try {
+                        // Create NASA API service if needed
+                        if (typeof NasaApiService === 'undefined') {
+                            debugInfo.innerHTML += `<div class="debug-error"><strong>NASA API:</strong> NasaApiService class not defined</div>`;
+                            return;
+                        }
+                        
+                        // Make sure simulation exists
+                        if (!window.simulation) {
+                            window.simulation = new Simulation();
+                            debugInfo.innerHTML += `<div><strong>Simulation:</strong> Created new instance</div>`;
+                        }
+                        
+                        // Create NASA API service and load data
+                        const nasaApiService = new NasaApiService();
+                        debugInfo.innerHTML += `<div><strong>NASA API:</strong> Service created</div>`;
+                        
+                        // Initialize with the physics engine
+                        if (simulation.physicsEngine) {
+                            simulation.physicsEngine.initializeApiService(nasaApiService);
+                            simulation.physicsEngine.setUseRealData(true);
+                            debugInfo.innerHTML += `<div><strong>NASA API:</strong> Connected to physics engine</div>`;
+                            
+                            // Load celestial body textures
+                            simulation.physicsEngine.updateCelestialBodyTextures()
+                                .then(() => {
+                                    debugInfo.innerHTML += `<div><strong>NASA API:</strong> Celestial body textures updated</div>`;
+                                    
+                                    // Force renderer to update
+                                    if (simulation.renderer) {
+                                        // Force render of one frame
+                                        simulation.renderer.render(simulation);
+                                        debugInfo.innerHTML += `<div><strong>Renderer:</strong> Frame rendered with NASA textures</div>`;
+                                    }
+                                })
+                                .catch(error => {
+                                    debugInfo.innerHTML += `<div class="debug-error"><strong>NASA API Error:</strong> ${error.message}</div>`;
+                                });
+                        } else {
+                            debugInfo.innerHTML += `<div class="debug-error"><strong>Physics Engine:</strong> Not available</div>`;
+                        }
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>NASA API Error:</strong> ${error.message}</div>`;
+                    }
+                });
+
+                // Force animation loop directly
+                document.getElementById('debug-force-animation-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    debugInfo.innerHTML += `<div><strong>Animation:</strong> Forcing animation loop...</div>`;
+                    
+                    try {
+                        // Make sure we have a simulation
+                        if (!window.simulation) {
+                            window.simulation = new Simulation();
+                            debugInfo.innerHTML += `<div><strong>Simulation:</strong> Created new instance</div>`;
+                        }
+                        
+                        // Set isRunning flag manually
+                        simulation.isRunning = true;
+                        simulation.isPaused = false;
+                        simulation.lastFrameTime = performance.now();
+                        
+                        // Force a direct call to gameLoop
+                        debugInfo.innerHTML += `<div><strong>Animation:</strong> Directly calling gameLoop...</div>`;
+                        simulation.gameLoop(performance.now());
+                        
+                        // Update debug info with animation state
+                        debugInfo.innerHTML += `<div><strong>Animation:</strong> First frame completed, check if animation continues</div>`;
+                        debugInfo.innerHTML += `<div><strong>Animation Status:</strong> isRunning=${simulation.isRunning}, isPaused=${simulation.isPaused}</div>`;
+                        
+                        // Update start button text
+                        document.getElementById('start-btn').textContent = 'Pause Simulation';
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Animation Error:</strong> ${error.message}</div>`;
+                    }
+                });
+
+                // Direct call to start method
+                document.getElementById('debug-direct-start-btn').addEventListener('click', function() {
+                    const debugInfo = document.getElementById('debug-info');
+                    debugInfo.innerHTML += `<div><strong>Debug:</strong> Directly calling simulation.start()...</div>`;
+                    
+                    try {
+                        // Make sure simulation exists
+                        if (!window.simulation) {
+                            window.simulation = new Simulation();
+                            debugInfo.innerHTML += `<div><strong>Simulation:</strong> Created new instance</div>`;
+                        }
+                        
+                        // Force the renderer to initialize first
+                        if (!simulation.renderer) {
+                            debugInfo.innerHTML += `<div><strong>Renderer:</strong> Initializing...</div>`;
+                            simulation.initializeRenderer();
+                            if (!simulation.renderer) {
+                                throw new Error("Failed to initialize renderer");
+                            }
+                            debugInfo.innerHTML += `<div><strong>Renderer:</strong> Initialized successfully</div>`;
+                        }
+                        
+                        // Directly call start with error capture
+                        debugInfo.innerHTML += `<div><strong>Start:</strong> Calling simulation.start() directly...</div>`;
+                        simulation.start();
+                        
+                        // Show the simulation status after start
+                        debugInfo.innerHTML += `<div><strong>Simulation Status:</strong> isRunning=${simulation.isRunning}, isPaused=${simulation.isPaused}</div>`;
+                        
+                        // Check back in a few seconds to see if frames are incrementing
+                        setTimeout(() => {
+                            debugInfo.innerHTML += `<div><strong>Frame check:</strong> After 2 seconds, frameCount=${simulation.frameCount}</div>`;
+                        }, 2000);
+                    } catch (error) {
+                        debugInfo.innerHTML += `<div class="debug-error"><strong>Start Error:</strong> ${error.message}</div>`;
                     }
                 });
             </script>

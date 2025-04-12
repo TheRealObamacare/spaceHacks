@@ -22,6 +22,7 @@ class PhysicsEngine {
                 mass: 5.972e24,
                 radius: 6371000,
                 color: '#1E88E5',
+                texture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/The_Blue_Marble_%28remastered%29.jpg/600px-The_Blue_Marble_%28remastered%29.jpg',
                 nasa_id: '399' // JPL Horizons ID for Earth
             },
             {
@@ -30,6 +31,7 @@ class PhysicsEngine {
                 mass: 7.342e22,
                 radius: 1737000,
                 color: '#9E9E9E',
+                texture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/FullMoon2010.jpg/600px-FullMoon2010.jpg',
                 nasa_id: '301' // JPL Horizons ID for Moon
             }
         ];
@@ -126,21 +128,32 @@ class PhysicsEngine {
      */
     async updateCelestialBodyTextures() {
         if (!this.useRealData || !this.nasaApiService) {
+            console.log("Using default textures (NASA API not available or real data not enabled)");
             return;
         }
         
         try {
+            console.log("Fetching celestial body images from NASA...");
+            
             for (const body of this.celestialBodies) {
+                console.log(`Fetching image for ${body.name}...`);
+                
                 // Fetch image for this body
                 const images = await this.nasaApiService.fetchCelestialBodyImages(body.name, 1);
                 
-                if (images && images.length > 0) {
+                if (images && images.length > 0 && images[0].url) {
+                    console.log(`Got image for ${body.name}: ${images[0].url}`);
                     body.texture = images[0].url;
-                    console.log(`Updated texture for ${body.name}`);
+                    body.description = images[0].description || `Image of ${body.name}`;
+                } else {
+                    console.log(`No NASA images found for ${body.name}, using default texture`);
                 }
             }
+            
+            console.log("Celestial body texture update complete");
         } catch (error) {
             console.error("Error updating celestial body textures:", error);
+            console.log("Using default textures due to API error");
         }
     }
 

@@ -12,6 +12,21 @@ class Simulation {
             // Create physics engine
             this.physicsEngine = new PhysicsEngine();
             
+            // Try to load real celestial data if NASA API is available
+            if (window.NasaApiService) {
+                console.log("NASA API service detected, attempting to load real data");
+                this.nasaApiService = new NasaApiService();
+                
+                // Set to use real data from NASA if available
+                this.physicsEngine.initializeApiService(this.nasaApiService);
+                this.physicsEngine.setUseRealData(true);
+                
+                // Load celestial body images
+                this.loadCelestialBodyImages();
+            } else {
+                console.log("NASA API service not detected, using default celestial data");
+            }
+            
             // Create spacecraft
             this.spacecraft = new Spacecraft({
                 // Position spacecraft in a stable orbit around Earth
@@ -35,6 +50,7 @@ class Simulation {
             this.predictedPath = []; // Store predicted trajectory points
             this.predictionSteps = 300; // Number of steps to predict ahead
             this.predictionTimeStep = 0.1; // Time step for prediction in seconds
+            this.frameCount = 0; // Initialize frame counter
             
             // Boundary and countdown properties
             this.boundaryRadius = config.BOUNDARY_RADIUS || 50000000000; // 50 million km default
@@ -83,31 +99,35 @@ class Simulation {
         try {
             console.log("Initializing renderer...");
             
-            // Make sure the canvas element exists before creating the renderer
+            // Create renderer
+            this.renderer = new Renderer('space-canvas');
+            
+            // Verify the renderer was created successfully
+            if (!this.renderer) {
+                throw new Error("Failed to create renderer");
+            }
+            
+            // Ensure the canvas exists and has dimensions
             const canvas = document.getElementById('space-canvas');
             if (!canvas) {
-                console.error("Canvas element 'space-canvas' not found");
                 throw new Error("Canvas element not found");
             }
             
-            // Create the renderer with the correct canvas ID
-            this.renderer = new Renderer('space-canvas');
+            // Make sure the canvas is sized correctly
+            if (canvas.width === 0 || canvas.height === 0) {
+                console.log("Canvas has zero dimensions, attempting to resize...");
+                this.renderer.resize();
+            }
             
-            // Initialize the UI values immediately
-            this.updateUI();
+            // Render a single frame to make sure everything works
+            console.log("Rendering initial frame...");
+            this.renderer.render(this);
+            
             console.log("Renderer initialized successfully");
+            return true;
         } catch (error) {
             console.error("Error initializing renderer:", error);
-            // Display error to user
-            const errorDiv = document.createElement('div');
-            errorDiv.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#500; color:white; padding:20px; border-radius:10px; z-index:9999; max-width:80%; text-align:center;';
-            errorDiv.innerHTML = `
-                <h3>Error Initializing Renderer</h3>
-                <p>${error.message}</p>
-                <p>Try refreshing the page or check console for details.</p>
-                <button onclick="this.parentNode.style.display='none'">Dismiss</button>
-            `;
-            document.body.appendChild(errorDiv);
+            return false;
         }
     }
     
@@ -118,17 +138,25 @@ class Simulation {
         console.log("Start button clicked. isRunning =", this.isRunning);
         try {
             if (!this.isRunning) {
-                this.isRunning = true;
-                this.isPaused = false;
+                // Initialize time tracking
                 this.lastFrameTime = performance.now();
                 this.lastTopicChange = this.lastFrameTime;
+                this.frameCount = 0;
                 
-                // Start the animation loop
-                console.log("Starting animation loop...");
-                requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+                // Update state
+                this.isRunning = true;
+                this.isPaused = false;
+                
+                // Start the animation loop with explicit window reference
+                console.log("Starting animation loop with window.requestAnimationFrame...");
+                window.requestAnimationFrame((timestamp) => {
+                    console.log("First animation frame callback received with timestamp:", timestamp);
+                    this.gameLoop(timestamp);
+                });
                 
                 // Update UI
                 document.getElementById('start-btn').textContent = 'Pause Simulation';
+                console.log("Animation loop started, button updated to 'Pause Simulation'");
             } else {
                 this.isPaused = !this.isPaused;
                 
@@ -140,11 +168,13 @@ class Simulation {
                 } else {
                     console.log("Simulation resumed");
                     document.getElementById('start-btn').textContent = 'Pause Simulation';
-                    this.lastFrameTime = performance.now(); // Reset time to avoid large jumps
+                    // Reset time tracking to avoid large time jumps
+                    this.lastFrameTime = performance.now();
                 }
             }
         } catch (error) {
             console.error("Error starting simulation:", error);
+            alert("Error starting simulation: " + error.message);
         }
     }
     
@@ -159,6 +189,7 @@ class Simulation {
         });
         this.renderer.resetTrail();
         this.elapsedTime = 0;
+        this.frameCount = 0;
         this.isPaused = false;
         this.predictedPath = [];
         
@@ -260,44 +291,106 @@ class Simulation {
      * @param {number} timestamp - Current timestamp in milliseconds
      */
     gameLoop(timestamp) {
-        if (!this.isRunning) return;
-        
-        // Skip update if paused, but continue the animation loop
-        if (!this.isPaused) {
-            // Calculate delta time (in seconds)
-            const deltaTime = (timestamp - this.lastFrameTime) / 1000;
-            this.lastFrameTime = timestamp;
-            
-            // Update elapsed time
-            this.elapsedTime += deltaTime;
-            
-            // Update physics (with scaled time)
-            this.physicsEngine.setTimeScale(this.timeScale);
-            this.spacecraft.update(deltaTime, this.physicsEngine);
-            
-            // Check boundary status
-            if (this.checkBoundaryStatus(deltaTime)) {
-                // Simulation ended due to boundary violation
-                // Reset, but don't immediately start
-                this.isPaused = true;
+        try {
+            // Limit logging to reduce performance impact
+            if (this.frameCount % 100 === 0) {
+                console.log(`gameLoop frame ${this.frameCount}, isRunning=${this.isRunning}, isPaused=${this.isPaused}`);
+                // Log position for debugging
+                if (this.spacecraft) {
+                    console.log(`Spacecraft position: x=${this.spacecraft.position.x}, y=${this.spacecraft.position.y}`);
+                    console.log(`Spacecraft velocity: x=${this.spacecraft.velocity.x}, y=${this.spacecraft.velocity.y}`);
+                }
             }
             
-            // Update UI elements
-            this.updateUI();
-            
-            // Cycle through physics topics
-            if (timestamp - this.lastTopicChange > this.topicChangeInterval) {
-                this.currentTopic = (this.currentTopic + 1) % this.physicsTopics.length;
-                this.lastTopicChange = timestamp;
-                document.getElementById('current-principle').textContent = this.physicsTopics[this.currentTopic].name;
+            // Exit if simulation is not running
+            if (!this.isRunning) {
+                console.log("gameLoop exiting: simulation is not running");
+                return;
             }
+            
+            // Increment frame counter
+            this.frameCount++;
+            
+            // Update physics if not paused
+            if (!this.isPaused) {
+                try {
+                    // Calculate delta time (in seconds)
+                    const deltaTime = (timestamp - this.lastFrameTime) / 1000;
+                    
+                    // Safety check for unreasonable deltaTime (e.g., after tab was inactive)
+                    const maxDeltaTime = 0.1; // Maximum 100ms
+                    const safeTime = Math.min(deltaTime, maxDeltaTime);
+                    
+                    // Update lastFrameTime for next frame
+                    this.lastFrameTime = timestamp;
+                    
+                    // Update elapsed time
+                    this.elapsedTime += safeTime;
+                    
+                    // Update physics (with scaled time)
+                    this.physicsEngine.setTimeScale(this.timeScale);
+                    
+                    // Update spacecraft with safe time
+                    this.spacecraft.update(safeTime, this.physicsEngine);
+                    
+                    // Check boundary status
+                    if (this.checkBoundaryStatus(safeTime)) {
+                        // Simulation ended due to boundary violation
+                        console.log("Boundary violation detected, pausing simulation");
+                        this.isPaused = true;
+                    }
+                    
+                    // Update UI elements
+                    this.updateUI();
+                    
+                    // Cycle through physics topics
+                    if (timestamp - this.lastTopicChange > this.topicChangeInterval) {
+                        this.currentTopic = (this.currentTopic + 1) % this.physicsTopics.length;
+                        this.lastTopicChange = timestamp;
+                        document.getElementById('current-principle').textContent = this.physicsTopics[this.currentTopic].name;
+                    }
+                } catch (updateError) {
+                    console.error("Error during physics update:", updateError);
+                }
+            }
+            
+            // Always render the scene, even when paused
+            try {
+                if (this.renderer) {
+                    // Ensure camera follows spacecraft before rendering
+                    if (this.spacecraft && this.renderer.followSpacecraft) {
+                        this.renderer.updateCamera(this.spacecraft);
+                    }
+                    
+                    // Force the renderer to update trail before rendering
+                    if (this.spacecraft && !this.isPaused) {
+                        this.renderer.updateTrail(this.spacecraft);
+                    }
+                    
+                    // Render the scene
+                    this.renderer.render(this);
+                } else {
+                    console.warn("Renderer not available for rendering");
+                }
+            } catch (renderError) {
+                console.error("Error during rendering:", renderError);
+            }
+            
+            // Continue loop - CRITICAL: This keeps the animation running
+            if (this.isRunning) {
+                window.requestAnimationFrame((newTimestamp) => {
+                    try {
+                        this.gameLoop(newTimestamp);
+                    } catch (loopError) {
+                        console.error("Error in animation loop:", loopError);
+                    }
+                });
+            } else {
+                console.warn("Animation loop stopped: isRunning=false");
+            }
+        } catch (error) {
+            console.error("Unhandled error in gameLoop:", error);
         }
-        
-        // Always render the scene, even when paused
-        this.renderer.render(this);
-        
-        // Continue loop
-        requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
     }
     
     /**
@@ -558,6 +651,24 @@ class Simulation {
         
         // Update button text
         document.getElementById('start-btn').textContent = 'Start Simulation';
+    }
+    
+    /**
+     * Load images for celestial bodies
+     */
+    async loadCelestialBodyImages() {
+        try {
+            if (!this.nasaApiService) return;
+            console.log("Loading celestial body images...");
+            
+            // Update celestial body textures
+            await this.physicsEngine.updateCelestialBodyTextures();
+            
+            // Log success
+            console.log("Celestial body images loaded");
+        } catch (error) {
+            console.error("Error loading celestial body images:", error);
+        }
     }
 }
 
