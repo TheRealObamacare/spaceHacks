@@ -79,10 +79,6 @@ To run this project locally:
 - Mobile device support through touch controls
 - Additional educational content and guided tutorials
 
-## Credits
-
-Created by [Your Name] for the SpaceHacks competition.
-
 ## License
 
 This project is released under the MIT License - see the LICENSE file for details. 

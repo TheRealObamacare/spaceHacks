@@ -10,11 +10,9 @@
 
 class PhysicsEngine {
     constructor() {
-        // Physics constants
-        this.G = 6.67430e-11; // Gravitational constant (m^3 kg^-1 s^-2)
-        this.timeScale = 1.0; // Time scaling factor (1.0 = real time)
+        this.G = 6.67430e-11;
+        this.timeScale = 1.0;
         
-        // Celestial bodies (position in meters, mass in kg, radius in meters)
         this.celestialBodies = [
             {
                 name: 'Earth',
@@ -23,7 +21,7 @@ class PhysicsEngine {
                 radius: 6371000,
                 color: '#1E88E5',
                 texture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/The_Blue_Marble_%28remastered%29.jpg/600px-The_Blue_Marble_%28remastered%29.jpg',
-                nasa_id: '399' // JPL Horizons ID for Earth
+                nasa_id: '399'
             },
             {
                 name: 'Moon',
@@ -32,11 +30,10 @@ class PhysicsEngine {
                 radius: 1737000,
                 color: '#9E9E9E',
                 texture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/FullMoon2010.jpg/600px-FullMoon2010.jpg',
-                nasa_id: '301' // JPL Horizons ID for Moon
+                nasa_id: '301'
             }
         ];
         
-        // NASA API service for fetching real data
         this.nasaApiService = null;
         this.useRealData = false;
     }
@@ -75,38 +72,31 @@ class PhysicsEngine {
         try {
             console.log("Updating celestial bodies from NASA data...");
             
-            // Get current date and the day after for ephemeris data
             const today = new Date();
             const tomorrow = new Date();
             tomorrow.setDate(today.getDate() + 1);
             
-            // Format dates for API
             const startTime = today.toISOString().split('T')[0];
             const stopTime = tomorrow.toISOString().split('T')[0];
             
-            // Update each celestial body
             for (const body of this.celestialBodies) {
                 if (body.nasa_id) {
                     console.log(`Updating ${body.name} data from NASA...`);
                     
-                    // Fetch data for this body
                     const ephemerisData = await this.nasaApiService.fetchEphemerisData(
                         body.nasa_id, 
                         startTime,
                         stopTime
                     );
                     
-                    // Apply the data if available
                     if (ephemerisData && ephemerisData.position) {
                         console.log(`Updating position for ${body.name}`);
                         
-                        // Update position
                         body.position = {
                             x: ephemerisData.position.x,
                             y: ephemerisData.position.y
                         };
                         
-                        // Update velocity if available
                         if (ephemerisData.velocity) {
                             body.velocity = {
                                 x: ephemerisData.velocity.x,
@@ -138,7 +128,6 @@ class PhysicsEngine {
             for (const body of this.celestialBodies) {
                 console.log(`Fetching image for ${body.name}...`);
                 
-                // Fetch image for this body
                 const images = await this.nasaApiService.fetchCelestialBodyImages(body.name, 1);
                 
                 if (images && images.length > 0 && images[0].url) {
@@ -166,16 +155,13 @@ class PhysicsEngine {
      * @returns {Object} Force vector {x, y}
      */
     calculateGravitationalForce(obj1, obj2) {
-        // Calculate distance between objects
         const dx = obj2.position.x - obj1.position.x;
         const dy = obj2.position.y - obj1.position.y;
         const distanceSquared = dx * dx + dy * dy;
         const distance = Math.sqrt(distanceSquared);
         
-        // Calculate force magnitude
         const forceMagnitude = this.G * (obj1.mass * obj2.mass) / distanceSquared;
         
-        // Calculate force components
         const forceX = forceMagnitude * (dx / distance);
         const forceY = forceMagnitude * (dy / distance);
         
@@ -290,31 +276,25 @@ class PhysicsEngine {
      * @returns {Object} Orbital parameters
      */
     calculateOrbitalParameters(spacecraft) {
-        // For simplicity, we'll calculate orbit around Earth
         const earth = this.celestialBodies[0];
         
-        // Calculate relative position and velocity
         const relativePosition = {
             x: spacecraft.position.x - earth.position.x,
             y: spacecraft.position.y - earth.position.y
         };
         
-        // Distance to central body
         const distance = Math.sqrt(
             relativePosition.x * relativePosition.x + 
             relativePosition.y * relativePosition.y
         );
         
-        // Calculate speed
         const speed = Math.sqrt(
             spacecraft.velocity.x * spacecraft.velocity.x + 
             spacecraft.velocity.y * spacecraft.velocity.y
         );
         
-        // Calculate orbital speed required for circular orbit at this distance
         const orbitalSpeed = Math.sqrt(this.G * earth.mass / distance);
         
-        // Calculate gravitational acceleration at current position
         const gravitationalAcceleration = this.G * earth.mass / (distance * distance);
         
         return {
@@ -336,7 +316,6 @@ class PhysicsEngine {
     }
 }
 
-// Export the PhysicsEngine class
 if (typeof module !== 'undefined') {
     module.exports = { PhysicsEngine };
 } 

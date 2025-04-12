@@ -7,30 +7,25 @@
 
 class Spacecraft {
     constructor(options = {}) {
-        // Basic properties
         this.name = options.name || 'Explorer I';
-        this.mass = options.mass || 1000; // kg
-        this.radius = options.radius || 10; // meters
+        this.mass = options.mass || 1000;
+        this.radius = options.radius || 10;
         this.color = options.color || '#FFFFFF';
         
-        // Position and motion
-        this.position = options.position || { x: 0, y: 8371000 }; // 2000km above Earth (default)
-        this.velocity = options.velocity || { x: 7800, y: 0 }; // Initial orbital velocity (m/s)
+        this.position = options.position || { x: 0, y: 8371000 };
+        this.velocity = options.velocity || { x: 7800, y: 0 };
         this.acceleration = { x: 0, y: 0 };
-        this.orientation = options.orientation || 0; // Radians (0 = facing right)
+        this.orientation = options.orientation || 0;
         
-        // Spacecraft capabilities
-        this.maxThrust = options.maxThrust || 30000; // Newtons
+        this.maxThrust = options.maxThrust || 30000;
         this.currentThrust = 0;
-        this.maxFuel = options.maxFuel || 1000; // kg
+        this.maxFuel = options.maxFuel || 1000;
         this.currentFuel = options.fuel || this.maxFuel;
-        this.fuelConsumptionRate = options.fuelConsumptionRate || 0.1; // kg per second at max thrust
+        this.fuelConsumptionRate = options.fuelConsumptionRate || 0.1;
         
-        // Control properties
-        this.rotationSpeed = options.rotationSpeed || Math.PI / 4; // Radians per second
-        this.thrustIncrement = options.thrustIncrement || 0.1; // Percentage of max thrust
+        this.rotationSpeed = options.rotationSpeed || Math.PI / 4;
+        this.thrustIncrement = options.thrustIncrement || 0.1;
         
-        // State flags
         this.isThrusting = false;
         this.isRotatingLeft = false;
         this.isRotatingRight = false;
@@ -46,7 +41,6 @@ class Spacecraft {
     update(deltaTime, physicsEngine) {
         if (this.isDestroyed) return;
         
-        // Update orientation based on rotation controls
         if (this.isRotatingLeft) {
             this.orientation -= this.rotationSpeed * deltaTime;
         }
@@ -54,42 +48,33 @@ class Spacecraft {
             this.orientation += this.rotationSpeed * deltaTime;
         }
         
-        // Normalize orientation to [0, 2π)
         this.orientation = (this.orientation + 2 * Math.PI) % (2 * Math.PI);
         
-        // Calculate thrust force based on control inputs
         let thrustMagnitude = 0;
         if (this.isThrusting && this.currentFuel > 0) {
             thrustMagnitude = this.maxThrust;
             
-            // Consume fuel
             const fuelUsed = this.fuelConsumptionRate * thrustMagnitude / this.maxThrust * deltaTime;
             this.currentFuel = Math.max(0, this.currentFuel - fuelUsed);
             
-            // If fuel runs out during this frame, scale down thrust proportionally
             if (this.currentFuel === 0) {
                 thrustMagnitude *= (1 - fuelUsed / (fuelUsed + this.currentFuel));
             }
         }
         
-        // Calculate thrust force vector
         const thrustForce = physicsEngine.calculateThrustForce(thrustMagnitude, this.orientation);
         
-        // Calculate gravitational force (the universal law of gravitation)
         const gravityForce = physicsEngine.calculateNetGravitationalForce(this);
         
-        // Calculate net force
         const netForce = {
             x: thrustForce.x + gravityForce.x,
             y: thrustForce.y + gravityForce.y
         };
         
-        // Update acceleration, velocity, and position using Newtonian physics
         this.acceleration = physicsEngine.calculateAcceleration(netForce, this.mass);
         this.velocity = physicsEngine.calculateNewVelocity(this.velocity, this.acceleration, deltaTime);
         this.position = physicsEngine.calculateNewPosition(this.position, this.velocity, this.acceleration, deltaTime);
         
-        // Check for collisions
         const collidedBody = physicsEngine.checkCollisions(this);
         if (collidedBody) {
             this.isDestroyed = true;
@@ -182,7 +167,6 @@ class Spacecraft {
     }
 }
 
-// Export the Spacecraft class
 if (typeof module !== 'undefined') {
     module.exports = { Spacecraft };
 } 
