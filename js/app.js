@@ -322,7 +322,7 @@ function setupEventListeners() {
  * Start or pause the simulation
  */
 function startSimulation() {
-    console.log('Start button clicked - FIXED IMPLEMENTATION');
+    console.log('Start button clicked - Simplified Implementation');
     updateDebugInfo('Action', 'Start button clicked');
     
     if (!simulation) {
@@ -341,15 +341,13 @@ function startSimulation() {
     }
     
     try {
-        // Make sure the renderer is initialized and ready
+        // Ensure the renderer is initialized before starting/pausing
         if (!simulation.renderer) {
             console.log('Renderer not initialized, initializing now');
             updateDebugInfo('Renderer', 'Initializing...');
             
-            // Initialize the renderer
             const rendererInitialized = simulation.initializeRenderer();
             
-            // Check if renderer was created
             if (!simulation.renderer || !rendererInitialized) {
                 throw new Error('Failed to initialize renderer');
             }
@@ -367,59 +365,40 @@ function startSimulation() {
             throw new Error('Failed to get 2D context from canvas');
         }
         
-        // Update the canvas size to match its container
+        // Update the canvas size if needed
         if (simulation.renderer) {
             simulation.renderer.resize();
         }
         
-        // Log simulation state before start
-        console.log('Simulation state BEFORE start:', {
-            isRunning: simulation.isRunning,
-            isPaused: simulation.isPaused
-        });
+        // Let the simulation object handle the start/pause logic
+        simulation.start(); 
         
-        // Force set key values before calling start to ensure proper initialization
-        if (!simulation.isRunning) {
-            // Initialize time tracking
-            simulation.lastFrameTime = performance.now();
-            simulation.lastTopicChange = simulation.lastFrameTime;
-            simulation.frameCount = 0;
-            // We'll let simulation.start() set isRunning = true
-        }
-        
-        // Start the simulation
-        simulation.start();
-        
-        // Update tracking variables
+        // Update global tracking variable (if still needed elsewhere)
         isSimulationRunning = simulation.isRunning;
         
-        // Log simulation state after start
-        console.log('Simulation state AFTER start:', {
+        // Log simulation state after calling simulation.start()
+        console.log('Simulation state AFTER calling simulation.start():', {
             isRunning: simulation.isRunning,
             isPaused: simulation.isPaused,
             lastFrameTime: simulation.lastFrameTime,
-            renderer: simulation.renderer ? 'Initialized' : 'Not initialized',
-            canvas: {
-                width: canvas.width,
-                height: canvas.height
-            }
+            frameCount: simulation.frameCount
         });
         
-        // Ensure the start button text is correct
+        // Ensure the start button text reflects the actual state from simulation
         document.getElementById('start-btn').textContent = 
-            simulation.isPaused ? 'Resume Simulation' : 'Pause Simulation';
+            simulation.isRunning ? (simulation.isPaused ? 'Resume Simulation' : 'Pause Simulation') : 'Start Simulation';
             
-        updateDebugInfo('Simulation', simulation.isPaused ? 'Paused' : 'Running');
+        updateDebugInfo('Simulation', simulation.isRunning ? (simulation.isPaused ? 'Paused' : 'Running') : 'Stopped');
         
     } catch (error) {
-        console.error('Failed to start simulation:', error);
-        updateDebugInfo('Error', `Start failed: ${error.message}`);
+        console.error('Failed to start/pause simulation:', error);
+        updateDebugInfo('Error', `Start/Pause failed: ${error.message}`);
         
         // Show the error to the user
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#500; color:white; padding:20px; border-radius:10px; z-index:9999; max-width:80%; text-align:center;';
         errorDiv.innerHTML = `
-            <h3>Error Starting Simulation</h3>
+            <h3>Error Starting/Pausing Simulation</h3>
             <p>${error.message}</p>
             <button onclick="this.parentNode.style.display='none'">Dismiss</button>
         `;

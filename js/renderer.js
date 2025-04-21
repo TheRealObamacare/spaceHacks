@@ -29,7 +29,8 @@ class Renderer {
             this.resize(); // Set initial dimensions
             
             // Camera properties
-            this.scale = 1e-5; // Meters to pixels conversion
+            // Increased scale: 1 pixel = 5km (original was 1e-5 or 1px = 100km)
+            this.scale = 1 / 5000; // Meters to pixels conversion
             this.cameraOffset = { x: 0, y: 0 };
             this.followSpacecraft = true;
             
@@ -822,3 +823,4 @@ class Renderer {
 if (typeof module !== 'undefined') {
     module.exports = { Renderer };
 } 
+    this.scale = 1 / 5000; // Default scale: 1 pixel = 5 km (Increased from 50km)

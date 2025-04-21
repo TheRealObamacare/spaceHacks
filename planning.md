@@ -71,26 +71,47 @@ An interactive web-based space flight simulator that allows users to experiment 
 - Mobile device support
 - AR/VR integration for immersive learning experience
 
-## Current Debug Issue: Simulation Frame Rendering
-- **Issue Identified**: Simulation only renders a single frame and doesn't continue animation
-- **Debug Report**: 
-  - Renderer test shows a missing "drawBody" method error (likely a method name mismatch with "drawCelestialBody")
-  - The simulation starts but doesn't continue updating frames
-  - NASA API integration works for fetching celestial body textures
+## Current Debug Issues
+1.  **Start Simulation Button Inactive**: Clicking the 'Start Simulation' button does not initiate the simulation loop.
+2.  **Spaceship Controls Unresponsive**: Pressing W, A, or D keys does not result in spacecraft movement or rotation.
 
 ### Debugging Plan
-1. **Verify Animation Loop**:
-   - Check if the gameLoop method in Simulation class is properly continuing the animation
-   - Ensure requestAnimationFrame is being called repeatedly
 
-2. **Examine Event Connection**:
-   - Verify the start/pause button is correctly triggering the simulation loop
-   - Check if isRunning and isPaused flags are being set correctly
+#### Issue 1: Start Button Inactivity
+1.  **Verify Event Listener Attachment**: [ ]
+    - Check `app.js` -> `setupEventListeners()`: Ensure a 'click' listener is correctly attached to the `#start-btn` element.
+    - Confirm the listener calls `simulation.start()`.
+2.  **Trace `simulation.start()` Execution**: [ ]
+    - Add console logs inside `simulation.start()` in `simulation.js` to confirm it's being called.
+    - Verify the `isRunning` flag logic.
+3.  **Inspect `requestAnimationFrame` Call**: [ ]
+    - Confirm `window.requestAnimationFrame(this.gameLoop)` is reached within `simulation.start()`.
+    - Check for any errors thrown immediately after the call.
+4.  **Examine `gameLoop` Execution**: [ ]
+    - Add console logs at the beginning of `gameLoop` in `simulation.js` to see if the first frame callback executes.
+    - Check for errors within `gameLoop` that might prevent recursion.
 
-3. **Inspect Renderer Integration**:
-   - Make sure the renderer methods match what the simulation expects
-   - Fix the method name mismatch (drawBody vs drawCelestialBody)
+#### Issue 2: Spaceship Control Unresponsiveness
+1.  **Verify Key Event Listeners**: [ ]
+    - Check `app.js` -> `setupEventListeners()`: Ensure 'keydown' and 'keyup' listeners are attached to the `window` or `document`.
+    - Confirm these listeners call a handler function (e.g., `handleKeyDown`, `handleKeyUp`).
+2.  **Trace Input Handling**: [ ]
+    - Check the key event handlers in `app.js`: Ensure they correctly identify W, A, D keys and call `simulation.handleInput()` (or similar).
+    - Check `simulation.js` -> `handleInput()`: Confirm it correctly calls `spacecraft.startControl()` and `spacecraft.stopControl()` with the right arguments ('thrust', 'rotateLeft', 'rotateRight').
+3.  **Inspect `spacecraft.update()` Call**: [ ]
+    - Verify that `simulation.update()` calls `this.spacecraft.update(deltaTime, this.physicsEngine)` within the `gameLoop` in `simulation.js`.
+    - Add console logs inside `spacecraft.update()` in `spacecraft.js` to confirm it's being called each frame.
+4.  **Check `deltaTime` Value**: [ ]
+    - Log the `deltaTime` value passed to `spacecraft.update()`. Ensure it's a positive, non-zero number.
+5.  **Confirm State Changes**: [ ]
+    - Log the values of `this.isThrusting`, `this.isRotatingLeft`, `this.isRotatingRight` within `spacecraft.update()` to see if control flags are being set.
+    - Log `this.position` and `this.velocity` to see if they change when controls are active.
 
-4. **Debug Object References**:
-   - Ensure that all objects (simulation, renderer, spacecraft, etc.) are properly instantiated and referenced
+#### General Checks
+1.  **Console Errors**: [ ]
+    - Open the browser's developer console and check for any JavaScript errors during initialization or after clicking 'Start' / pressing keys.
+2.  **Script Loading Order**: [ ]
+    - Ensure all necessary JavaScript files (`config.js`, `physics.js`, `spacecraft.js`, `renderer.js`, `simulation.js`, `app.js`) are loaded in the correct order in `index.html`.
+3.  **Object Instantiation**: [ ]
+    - Double-check that `simulation`, `physicsEngine`, `spacecraft`, and `renderer` objects are successfully created without errors (check console logs from constructors).
     

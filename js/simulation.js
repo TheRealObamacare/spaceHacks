@@ -150,8 +150,13 @@ class Simulation {
                 // Start the animation loop with explicit window reference
                 console.log("Starting animation loop with window.requestAnimationFrame...");
                 window.requestAnimationFrame((timestamp) => {
-                    console.log("First animation frame callback received with timestamp:", timestamp);
-                    this.gameLoop(timestamp);
+                    console.log(`>>> First animation frame callback received. Timestamp: ${timestamp}, isRunning: ${this.isRunning}`);
+                    if (this.isRunning) {
+                        console.log(">>> Calling gameLoop for the first time.");
+                        this.gameLoop(timestamp);
+                    } else {
+                        console.warn(">>> Simulation stopped before first gameLoop call.");
+                    }
                 });
                 
                 // Update UI
@@ -329,6 +334,9 @@ class Simulation {
                     
                     // Update physics (with scaled time)
                     this.physicsEngine.setTimeScale(this.timeScale);
+
+                    // Log deltaTime for debugging (using safeTime which is derived from deltaTime)
+                    console.log(`Game Loop - Frame: ${this.frameCount}, SafeTime: ${safeTime.toFixed(4)}s`);
                     
                     // Update spacecraft with safe time
                     this.spacecraft.update(safeTime, this.physicsEngine);
@@ -378,15 +386,22 @@ class Simulation {
             
             // Continue loop - CRITICAL: This keeps the animation running
             if (this.isRunning) {
+                // Log right before scheduling the next frame
+                if (this.frameCount % 100 === 0) { // Log periodically
+                    console.log(`>>> Scheduling next frame (Frame: ${this.frameCount}). isRunning: ${this.isRunning}`);
+                }
                 window.requestAnimationFrame((newTimestamp) => {
                     try {
                         this.gameLoop(newTimestamp);
                     } catch (loopError) {
-                        console.error("Error in animation loop:", loopError);
+                        console.error("Error in recursive animation loop call:", loopError);
+                        this.isRunning = false; // Stop loop on error
                     }
                 });
             } else {
-                console.warn("Animation loop stopped: isRunning=false");
+                 if (this.frameCount % 100 === 0 || !this.isRunning) { // Log if stopped
+                    console.warn(`>>> Animation loop stopped: isRunning=${this.isRunning} (Frame: ${this.frameCount})`);
+                 }
             }
         } catch (error) {
             console.error("Unhandled error in gameLoop:", error);
@@ -675,4 +690,4 @@ class Simulation {
 // Export the Simulation class
 if (typeof module !== 'undefined') {
     module.exports = { Simulation };
-} 
+}

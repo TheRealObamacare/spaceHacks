@@ -40,6 +40,16 @@ class Spacecraft {
      */
     update(deltaTime, physicsEngine) {
         if (this.isDestroyed) return;
+
+        // --- Debug Logging Start ---
+        const logFrequency = 100; // Log every 100 frames
+        const shouldLog = (typeof simulation !== 'undefined' && simulation.frameCount % logFrequency === 0);
+        if (shouldLog) {
+            console.log(`Spacecraft Update (Frame: ${simulation.frameCount}): deltaTime=${deltaTime.toFixed(4)}`);
+            console.log(`  Controls: Thrust=${this.isThrusting}, Left=${this.isRotatingLeft}, Right=${this.isRotatingRight}`);
+            console.log(`  Before Update: Pos=(${this.position.x.toFixed(0)}, ${this.position.y.toFixed(0)}), Vel=(${this.velocity.x.toFixed(2)}, ${this.velocity.y.toFixed(2)}), Orient=${this.orientation.toFixed(2)}`);
+        }
+        // --- Debug Logging End ---
         
         if (this.isRotatingLeft) {
             this.orientation -= this.rotationSpeed * deltaTime;
@@ -72,8 +82,24 @@ class Spacecraft {
         };
         
         this.acceleration = physicsEngine.calculateAcceleration(netForce, this.mass);
+        const oldVelocity = { ...this.velocity }; // Store old velocity for comparison
         this.velocity = physicsEngine.calculateNewVelocity(this.velocity, this.acceleration, deltaTime);
+        const oldPosition = { ...this.position }; // Store old position for comparison
         this.position = physicsEngine.calculateNewPosition(this.position, this.velocity, this.acceleration, deltaTime);
+
+        // --- Debug Logging Start ---
+        if (shouldLog) {
+            console.log(`  Forces: Thrust=(${thrustForce.x.toFixed(2)}, ${thrustForce.y.toFixed(2)}), Gravity=(${gravityForce.x.toFixed(2)}, ${gravityForce.y.toFixed(2)})`);
+            console.log(`  Physics: Accel=(${this.acceleration.x.toFixed(2)}, ${this.acceleration.y.toFixed(2)})`);
+            console.log(`  After Update: Pos=(${this.position.x.toFixed(0)}, ${this.position.y.toFixed(0)}), Vel=(${this.velocity.x.toFixed(2)}, ${this.velocity.y.toFixed(2)})`);
+            // Log changes only if significant
+            const posChange = Math.sqrt(Math.pow(this.position.x - oldPosition.x, 2) + Math.pow(this.position.y - oldPosition.y, 2));
+            const velChange = Math.sqrt(Math.pow(this.velocity.x - oldVelocity.x, 2) + Math.pow(this.velocity.y - oldVelocity.y, 2));
+            if (posChange > 1 || velChange > 0.1) { // Log if position changed by >1m or velocity by >0.1m/s
+                 console.log(`  CHANGES DETECTED: dPos=${posChange.toFixed(1)}m, dVel=${velChange.toFixed(2)}m/s`);
+            }
+        }
+        // --- Debug Logging End ---
         
         const collidedBody = physicsEngine.checkCollisions(this);
         if (collidedBody) {
@@ -169,4 +195,4 @@ class Spacecraft {
 
 if (typeof module !== 'undefined') {
     module.exports = { Spacecraft };
-} 
+}
