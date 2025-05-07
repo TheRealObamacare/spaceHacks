@@ -1,321 +1,84 @@
 /**
  * Physics Engine for Space Flight Simulator
- * 
- * This module handles all physics calculations including:
- * - Newtonian physics (acceleration, velocity, position)
- * - Gravitational forces
- * - Orbital mechanics
- * - Collisions
+ * Handles calculations: Newtonian physics, gravity, orbits, collisions.
  */
+const localConfig = (typeof config !== 'undefined') ? config : (window && window.config) ? window.config : {};
 
 class PhysicsEngine {
     constructor() {
-        this.G = 6.67430e-11;
+        this.G = localConfig.G || 6.67430e-11;
         this.timeScale = 1.0;
-        
-        this.celestialBodies = [
-            {
-                name: 'Earth',
-                position: { x: 0, y: 0 },
-                mass: 5.972e24,
-                radius: 6371000,
-                color: '#1E88E5',
-                texture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/The_Blue_Marble_%28remastered%29.jpg/600px-The_Blue_Marble_%28remastered%29.jpg',
-                nasa_id: '399'
-            },
-            {
-                name: 'Moon',
-                position: { x: 384400000, y: 0 },
-                mass: 7.342e22,
-                radius: 1737000,
-                color: '#9E9E9E',
-                texture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/FullMoon2010.jpg/600px-FullMoon2010.jpg',
-                nasa_id: '301'
-            }
+        this.celestialBodies = [ // Default bodies
+             { name: 'Sun', position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, mass: 1.989e30, radius: 696340000, color: '#FFD700', nasa_id: '10', texture: null },
+             { name: 'Mercury', position: { x: 57.9e9, y: 0 }, velocity: { x: 0, y: 47360 }, mass: 3.3011e23, radius: 2439000, color: '#E53935', nasa_id: '199', texture: null },
+             {name: 'Venus', position: { x: 108.9e9, y: 0 }, velocity: { x: 0, y: 35020 }, mass: 4.8675e24, radius: 6051800, color: '#FDD835', nasa_id: '299', texture: null},
+             { name: 'Earth', position: { x: 149.6e9, y: 0 }, velocity: { x: 0, y: 29780 }, mass: 5.972e24, radius: 6371000, color: '#1E88E5', nasa_id: '399', texture: null },
+             { name: 'Moon', position: { x: 149.6e9 + 384.4e6, y: 0 }, velocity: { x: 0, y: 29780 + 1022 }, mass: 7.342e22, radius: 1737400, color: '#9E9E9E', nasa_id: '301', texture: null }
         ];
-        
         this.nasaApiService = null;
-        this.useRealData = false;
+        this.useRealData = localConfig.USE_REAL_DATA || false;
+        console.log("PhysicsEngine initialized.");
     }
-    
-    /**
-     * Initialize NASA API service for real celestial data
-     * 
-     * @param {NasaApiService} apiService - The NASA API service instance
-     */
-    initializeApiService(apiService) {
-        this.nasaApiService = apiService;
-        console.log("NASA API service initialized in physics engine");
-    }
-    
-    /**
-     * Enable or disable the use of real NASA data
-     * 
-     * @param {boolean} enabled - Whether to use real data
-     */
-    setUseRealData(enabled) {
-        this.useRealData = enabled && this.nasaApiService !== null;
-        console.log(`Real NASA data ${this.useRealData ? 'enabled' : 'disabled'}`);
-    }
-    
-    /**
-     * Update celestial body positions using real ephemeris data
-     * 
-     * @returns {Promise<void>}
-     */
-    async updateCelestialBodiesFromNasa() {
-        if (!this.useRealData || !this.nasaApiService) {
-            console.log("Not using real data, skipping NASA update");
-            return;
-        }
-        
+
+    initializeApiService(apiService) { this.nasaApiService = apiService; console.log("PhysicsEngine: NASA API service linked."); this.setUseRealData(localConfig.USE_REAL_DATA); }
+    setUseRealData(enabled) { this.useRealData = enabled && this.nasaApiService !== null; console.log(`PhysicsEngine: Use Real NASA Data set to ${this.useRealData}`); if(enabled && !this.nasaApiService) console.warn("PhysicsEngine: Real data enabled, but API Service unavailable."); }
+
+    /** Method to trigger NASA body data update */
+    async updateAllCelestialBodiesFromNasa() {
+        if (!this.useRealData || !this.nasaApiService) { console.log("PhysicsEngine: Skipping NASA body update (disabled or no API svc)."); return false; }
+        console.log("PhysicsEngine: Requesting NASA body data update...");
         try {
-            console.log("Updating celestial bodies from NASA data...");
-            
-            const today = new Date();
-            const tomorrow = new Date();
-            tomorrow.setDate(today.getDate() + 1);
-            
-            const startTime = today.toISOString().split('T')[0];
-            const stopTime = tomorrow.toISOString().split('T')[0];
-            
-            for (const body of this.celestialBodies) {
-                if (body.nasa_id) {
-                    console.log(`Updating ${body.name} data from NASA...`);
-                    
-                    const ephemerisData = await this.nasaApiService.fetchEphemerisData(
-                        body.nasa_id, 
-                        startTime,
-                        stopTime
-                    );
-                    
-                    if (ephemerisData && ephemerisData.position) {
-                        console.log(`Updating position for ${body.name}`);
-                        
-                        body.position = {
-                            x: ephemerisData.position.x,
-                            y: ephemerisData.position.y
-                        };
-                        
-                        if (ephemerisData.velocity) {
-                            body.velocity = {
-                                x: ephemerisData.velocity.x,
-                                y: ephemerisData.velocity.y
-                            };
-                        }
-                    }
-                }
-            }
-            
-            console.log("Celestial body update complete");
-        } catch (error) {
-            console.error("Error updating celestial bodies from NASA:", error);
-        }
+            const bodyIdentifiers = this.celestialBodies.map(body => body.nasa_id || body.name);
+            const ephemerisDataMap = await this.nasaApiService.fetchMultipleBodies(bodyIdentifiers); // Fetch for today
+            let updatedCount = 0;
+            this.celestialBodies.forEach(body => {
+                const data = ephemerisDataMap[body.name.toLowerCase()];
+                if (data && !data.meta?.isDefault && data.position && !isNaN(data.position.x) && data.velocity && !isNaN(data.velocity.x)) {
+                    // console.log(`PhysicsEngine: Updating ${body.name} with NASA data.`); // Verbose log
+                    body.position = { x: data.position.x, y: data.position.y }; // Use X, Y for 2D
+                    body.velocity = { x: data.velocity.x, y: data.velocity.y };
+                    if (data.mass > 0) body.mass = data.mass;
+                    if (data.radius > 0) body.radius = data.radius;
+                    updatedCount++;
+                } else { console.warn(`PhysicsEngine: No valid/non-default NASA data for ${body.name}.`); }
+            });
+            console.log(`PhysicsEngine: NASA body update applied. Updated ${updatedCount}/${this.celestialBodies.length}.`);
+            return true; // Indicate success
+        } catch (error) { console.error("PhysicsEngine: Error during NASA body update:", error); return false; } // Indicate failure
     }
-    
-    /**
-     * Fetch and update textures for celestial bodies
-     */
-    async updateCelestialBodyTextures() {
-        if (!this.useRealData || !this.nasaApiService) {
-            console.log("Using default textures (NASA API not available or real data not enabled)");
-            return;
-        }
-        
+
+    /** Method to trigger NASA texture update */
+    async updateAllCelestialBodyTextures() {
+        if (!this.nasaApiService) { console.log("PhysicsEngine: Skipping texture update (no API service)."); return false; }
+        // Consider if this should depend on useRealData: if (!this.useRealData) return false;
+        console.log("PhysicsEngine: Requesting NASA texture update...");
         try {
-            console.log("Fetching celestial body images from NASA...");
-            
-            for (const body of this.celestialBodies) {
-                console.log(`Fetching image for ${body.name}...`);
-                
-                const images = await this.nasaApiService.fetchCelestialBodyImages(body.name, 1);
-                
-                if (images && images.length > 0 && images[0].url) {
-                    console.log(`Got image for ${body.name}: ${images[0].url}`);
-                    body.texture = images[0].url;
-                    body.description = images[0].description || `Image of ${body.name}`;
-                } else {
-                    console.log(`No NASA images found for ${body.name}, using default texture`);
-                }
-            }
-            
-            console.log("Celestial body texture update complete");
-        } catch (error) {
-            console.error("Error updating celestial body textures:", error);
-            console.log("Using default textures due to API error");
-        }
+            const bodyNames = this.celestialBodies.map(body => body.name);
+            const imageUrlMap = await this.nasaApiService.fetchAllCelestialBodyImages(bodyNames);
+            let updatedCount = 0;
+            this.celestialBodies.forEach(body => {
+                const url = imageUrlMap[body.name.toLowerCase()];
+                if (url && body.texture !== url) {
+                    body.texture = url; // Assign URL, Renderer will handle loading
+                    updatedCount++;
+                } else if (!url) { console.warn(`PhysicsEngine: No texture URL found for ${body.name}.`); }
+            });
+            console.log(`PhysicsEngine: Texture update applied. Assigned URLs for ${updatedCount}/${this.celestialBodies.length}.`);
+            return true; // Indicate success
+        } catch (error) { console.error("PhysicsEngine: Error during texture update:", error); return false; } // Indicate failure
     }
 
-    /**
-     * Calculate gravitational force between two objects
-     * F = G * (m1 * m2) / r^2
-     * 
-     * @param {Object} obj1 - First object with mass and position
-     * @param {Object} obj2 - Second object with mass and position
-     * @returns {Object} Force vector {x, y}
-     */
-    calculateGravitationalForce(obj1, obj2) {
-        const dx = obj2.position.x - obj1.position.x;
-        const dy = obj2.position.y - obj1.position.y;
-        const distanceSquared = dx * dx + dy * dy;
-        const distance = Math.sqrt(distanceSquared);
-        
-        const forceMagnitude = this.G * (obj1.mass * obj2.mass) / distanceSquared;
-        
-        const forceX = forceMagnitude * (dx / distance);
-        const forceY = forceMagnitude * (dy / distance);
-        
-        return { x: forceX, y: forceY };
-    }
-
-    /**
-     * Calculate total gravitational force on an object from all celestial bodies
-     * 
-     * @param {Object} object - Object with mass and position
-     * @returns {Object} Net force vector {x, y}
-     */
-    calculateNetGravitationalForce(object) {
-        let netForce = { x: 0, y: 0 };
-        
-        for (const body of this.celestialBodies) {
-            const force = this.calculateGravitationalForce(object, body);
-            netForce.x += force.x;
-            netForce.y += force.y;
-        }
-        
-        return netForce;
-    }
-
-    /**
-     * Calculate acceleration from force and mass (F = ma)
-     * 
-     * @param {Object} force - Force vector {x, y}
-     * @param {number} mass - Mass of object
-     * @returns {Object} Acceleration vector {x, y}
-     */
-    calculateAcceleration(force, mass) {
-        return {
-            x: force.x / mass,
-            y: force.y / mass
-        };
-    }
-
-    /**
-     * Update velocity based on acceleration and time
-     * v = v0 + a * t
-     * 
-     * @param {Object} velocity - Current velocity vector {x, y}
-     * @param {Object} acceleration - Acceleration vector {x, y}
-     * @param {number} deltaTime - Time step in seconds
-     * @returns {Object} New velocity vector {x, y}
-     */
-    calculateNewVelocity(velocity, acceleration, deltaTime) {
-        const scaledDeltaTime = deltaTime * this.timeScale;
-        return {
-            x: velocity.x + acceleration.x * scaledDeltaTime,
-            y: velocity.y + acceleration.y * scaledDeltaTime
-        };
-    }
-
-    /**
-     * Update position based on velocity and time
-     * p = p0 + v * t + 0.5 * a * t^2
-     * 
-     * @param {Object} position - Current position vector {x, y}
-     * @param {Object} velocity - Velocity vector {x, y}
-     * @param {Object} acceleration - Acceleration vector {x, y}
-     * @param {number} deltaTime - Time step in seconds
-     * @returns {Object} New position vector {x, y}
-     */
-    calculateNewPosition(position, velocity, acceleration, deltaTime) {
-        const scaledDeltaTime = deltaTime * this.timeScale;
-        return {
-            x: position.x + velocity.x * scaledDeltaTime + 0.5 * acceleration.x * scaledDeltaTime * scaledDeltaTime,
-            y: position.y + velocity.y * scaledDeltaTime + 0.5 * acceleration.y * scaledDeltaTime * scaledDeltaTime
-        };
-    }
-
-    /**
-     * Apply thrust force in the direction of spacecraft orientation
-     * 
-     * @param {number} thrustMagnitude - Magnitude of thrust force
-     * @param {number} orientation - Orientation angle in radians
-     * @returns {Object} Thrust force vector {x, y}
-     */
-    calculateThrustForce(thrustMagnitude, orientation) {
-        return {
-            x: thrustMagnitude * Math.cos(orientation),
-            y: thrustMagnitude * Math.sin(orientation)
-        };
-    }
-
-    /**
-     * Check for collision between spacecraft and celestial bodies
-     * 
-     * @param {Object} spacecraft - Spacecraft object with position and radius
-     * @returns {Object|null} Collided body or null if no collision
-     */
-    checkCollisions(spacecraft) {
-        for (const body of this.celestialBodies) {
-            const dx = spacecraft.position.x - body.position.x;
-            const dy = spacecraft.position.y - body.position.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < (spacecraft.radius + body.radius)) {
-                return body;
-            }
-        }
-        
-        return null;
-    }
-
-    /**
-     * Calculate orbital parameters for display
-     * 
-     * @param {Object} spacecraft - Spacecraft object
-     * @returns {Object} Orbital parameters
-     */
-    calculateOrbitalParameters(spacecraft) {
-        const earth = this.celestialBodies[0];
-        
-        const relativePosition = {
-            x: spacecraft.position.x - earth.position.x,
-            y: spacecraft.position.y - earth.position.y
-        };
-        
-        const distance = Math.sqrt(
-            relativePosition.x * relativePosition.x + 
-            relativePosition.y * relativePosition.y
-        );
-        
-        const speed = Math.sqrt(
-            spacecraft.velocity.x * spacecraft.velocity.x + 
-            spacecraft.velocity.y * spacecraft.velocity.y
-        );
-        
-        const orbitalSpeed = Math.sqrt(this.G * earth.mass / distance);
-        
-        const gravitationalAcceleration = this.G * earth.mass / (distance * distance);
-        
-        return {
-            distance: distance,
-            altitude: distance - earth.radius,
-            speed: speed,
-            orbitalSpeed: orbitalSpeed,
-            gravitationalAcceleration: gravitationalAcceleration
-        };
-    }
-
-    /**
-     * Set the simulation time scale
-     * 
-     * @param {number} scale - Time scale factor (1.0 = real time)
-     */
-    setTimeScale(scale) {
-        this.timeScale = scale;
-    }
+    // --- Core Physics Calculation Methods  ---
+    calculateGravitationalForce(o1, o2) { if(!o1?.position||!o2?.position)return{x:0,y:0}; const dx=o2.position.x-o1.position.x; const dy=o2.position.y-o1.position.y; const dSq=dx*dx+dy*dy+1e-6; const d=Math.sqrt(dSq); const m1=o1.mass||0; const m2=o2.mass||0; if(d===0||m1===0||m2===0||isNaN(m1)||isNaN(m2))return{x:0,y:0}; const fM=this.G*m1*m2/dSq; const fx=fM*dx/d; const fy=fM*dy/d; if(isNaN(fx)||isNaN(fy))return{x:0,y:0}; return{x:fx,y:fy}; }
+    calculateNetGravitationalForce(tO) { let nF={x:0,y:0}; this.celestialBodies.forEach(b=>{if(tO!==b&&(!tO.name||tO.name!==b.name)){const f=this.calculateGravitationalForce(tO,b); nF.x+=f.x; nF.y+=f.y;}}); return nF; }
+    calculateAcceleration(f, m) { if(!m||isNaN(m))return{x:0,y:0}; return{x:f.x/m, y:f.y/m}; }
+    calculateNewVelocity(v, a, dt) { const sdt=dt*this.timeScale; return{x:(v?.x||0)+(a?.x||0)*sdt, y:(v?.y||0)+(a?.y||0)*sdt}; }
+    calculateNewPosition(p, nv, dt) { const sdt=dt*this.timeScale; return{x:(p?.x||0)+(nv?.x||0)*sdt, y:(p?.y||0)+(nv?.y||0)*sdt}; }
+    calculateThrustForce(mag, ori) { return{x:mag*Math.cos(ori), y:mag*Math.sin(ori)}; }
+    checkCollisions(sc) { if(!sc?.position)return null; for(const b of this.celestialBodies){if(!b?.position)continue; const dx=sc.position.x-b.position.x; const dy=sc.position.y-b.position.y; const dSq=dx*dx+dy*dy; const sR=(sc.radius||0)+(b.radius||0); if(dSq<sR*sR)return b;} return null; }
+    calculateOrbitalParameters(sc) { if(!sc?.position||!sc?.velocity)return{}; let cB=null; let mDSq=Infinity; this.celestialBodies.forEach(b=>{const dx=sc.position.x-b.position.x;const dy=sc.position.y-b.position.y; const dSq=dx*dx+dy*dy; if(dSq<mDSq){mDSq=dSq;cB=b;}}); if(!cB)return{}; const d=Math.sqrt(mDSq); const alt=d-(cB.radius||0); const spd=Math.sqrt((sc.velocity.x||0)**2+(sc.velocity.y||0)**2); let cSpd=NaN; if(d>0&&cB.mass>0)cSpd=Math.sqrt(this.G*cB.mass/d); const rVx=(sc.velocity.x||0)-(cB.velocity?.x||0); const rVy=(sc.velocity.y||0)-(cB.velocity?.y||0); const rSpd=Math.sqrt(rVx**2+rVy**2); let gAcc=0; if(d>0)gAcc=this.G*cB.mass/mDSq; return{relativeToBody:cB.name, distance:d, altitude:alt, speed:spd, relativeSpeed:rSpd, circularOrbitalSpeed:cSpd, gravitationalAcceleration:gAcc}; }
+    setTimeScale(s) { if(s>0)this.timeScale=s; else console.warn("Physics: Invalid time scale"); }
+    getCelestialBodies() { return this.celestialBodies; }
 }
-
-if (typeof module !== 'undefined') {
-    module.exports = { PhysicsEngine };
-} 
+if (typeof module !== 'undefined') { module.exports = { PhysicsEngine }; } if (typeof window !== 'undefined' && typeof window.PhysicsEngine === 'undefined') { window.PhysicsEngine = PhysicsEngine; }
+console.log("PhysicsEngine.js loaded.");

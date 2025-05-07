@@ -1,520 +1,142 @@
 /**
  * NASA API Service
- * 
- * Provides integration with NASA APIs including:
- * - JPL Horizons API for ephemeris data
- * - NASA Image and Video Library API for celestial body imagery
- * - Astronomy Picture of the Day API
+ * Fetches ephemeris, images, APOD. Includes caching and fallbacks.
  */
+
+const localConfig = (typeof config !== 'undefined') ? config : (window && window.config) ? window.config : {};
+const localApiConfig = (typeof API_CONFIG !== 'undefined') ? API_CONFIG : (window && window.API_CONFIG) ? window.API_CONFIG : {};
 
 class NasaApiService {
     constructor() {
-        // Default NASA API key (DEMO_KEY has limitations)
-        // For production, use your own API key from https://api.nasa.gov/
-        this.apiKey = config.NASA_API_KEY || 'DEMO_KEY';
-        
-        // API endpoints
-        this.horizonsEndpoint = 'https://ssd.jpl.nasa.gov/api/horizons.api';
-        this.imageLibraryEndpoint = 'https://images-api.nasa.gov/search';
-        this.apodEndpoint = 'https://api.nasa.gov/planetary/apod';
-        
-        // Cache for API responses to minimize requests
-        this.cache = {
-            ephemeris: new Map(),
-            images: new Map(),
-            apod: null
-        };
-        
-        // Map of celestial body names to JPL Horizons IDs
-        this.bodyIds = {
-            'sun': '10',
-            'mercury': '199',
-            'venus': '299',
-            'earth': '399',
-            'moon': '301',
-            'mars': '499',
-            'jupiter': '599',
-            'saturn': '699',
-            'uranus': '799',
-            'neptune': '899',
-            'pluto': '999'
-        };
-        
-        console.log('NASA API Service initialized');
-    }
-    
-    /**
-     * Fetch ephemeris data from JPL Horizons API
-     * 
-     * @param {string} bodyName - Name of celestial body (lowercase)
-     * @param {Date} startDate - Start date for ephemeris data
-     * @param {Date} endDate - End date for ephemeris data
-     * @returns {Promise<object>} - Ephemeris data for the celestial body
-     */
-    async fetchEphemerisData(bodyName, startDate = new Date(), endDate = null) {
-        try {
-            if (!endDate) {
-                // Default to 1 day after start if not specified
-                endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + 1);
-            }
-            
-            // Format dates for Horizons API (YYYY-MM-DD)
-            const formatDate = (date) => {
-                return date.toISOString().split('T')[0];
-            };
-            
-            const startStr = formatDate(startDate);
-            const endStr = formatDate(endDate);
-            
-            // Create cache key
-            const cacheKey = `${bodyName}_${startStr}_${endStr}`;
-            
-            // Check cache first
-            if (this.cache.ephemeris.has(cacheKey)) {
-                console.log(`Using cached ephemeris data for ${bodyName}`);
-                return this.cache.ephemeris.get(cacheKey);
-            }
-            
-            // Get JPL Horizons ID for body
-            const bodyId = this.bodyIds[bodyName.toLowerCase()];
-            if (!bodyId) {
-                throw new Error(`Unknown celestial body: ${bodyName}`);
-            }
-            
-            // Prepare request parameters
-            const params = new URLSearchParams({
-                format: 'json',
-                COMMAND: `'${bodyId}'`,
-                OBJ_DATA: 'YES',
-                MAKE_EPHEM: 'YES',
-                EPHEM_TYPE: 'VECTORS',
-                CENTER: '500@0', // Solar System Barycenter
-                START_TIME: startStr,
-                STOP_TIME: endStr,
-                STEP_SIZE: '1d',
-                VEC_TABLE: '2',  // Type 2 vector table (state vectors)
-                REF_PLANE: 'ECLIPTIC',
-                OUT_UNITS: 'KM-S',
-                CSV_FORMAT: 'YES'
-            });
-            
-            console.log(`Fetching ephemeris data for ${bodyName} from JPL Horizons API...`);
-            
-            // Make API request
-            const response = await fetch(`${this.horizonsEndpoint}?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`NASA API Error: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            
-            // Parse the response 
-            const ephemerisData = this.parseHorizonsResponse(data, bodyName);
-            
-            // Cache the result
-            this.cache.ephemeris.set(cacheKey, ephemerisData);
-            
-            console.log(`Successfully fetched ephemeris data for ${bodyName}`);
-            return ephemerisData;
-        } catch (error) {
-            console.error(`Error fetching ephemeris data for ${bodyName}:`, error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Parse JPL Horizons API response
-     * 
-     * @param {object} data - Raw API response
-     * @param {string} bodyName - Name of celestial body
-     * @returns {object} - Parsed ephemeris data
-     */
-    parseHorizonsResponse(data, bodyName) {
-        try {
-            // Extract data from response
-            const result = {
-                name: bodyName,
-                position: { x: 0, y: 0, z: 0 },
-                velocity: { x: 0, y: 0, z: 0 },
-                mass: 0,
-                radius: 0,
-                meta: {}
-            };
-            
-            // Extract position and velocity from the vector table
-            // The format can be complex, so we need to parse carefully
-            if (data.result) {
-                // Extract physical properties
-                const physicalData = /Physical Properties \(.*\):\s+([\s\S]+?)(?=\n\n)/i.exec(data.result);
-                if (physicalData && physicalData[1]) {
-                    // Parse radius
-                    const radiusMatch = /Mean radius.*?([0-9.]+) km/i.exec(physicalData[1]);
-                    if (radiusMatch) {
-                        result.radius = parseFloat(radiusMatch[1]) * 1000; // Convert to meters
-                    }
-                    
-                    // Parse mass
-                    const massMatch = /Mass.*?([0-9.]+)(?:x10\^|\*10\^|\s*E)([+-]?[0-9]+)/i.exec(physicalData[1]);
-                    if (massMatch) {
-                        result.mass = parseFloat(massMatch[1]) * Math.pow(10, parseFloat(massMatch[2]));
-                    }
-                }
-                
-                // Extract vector data
-                const vectorTable = /\$\$SOE([\s\S]+?)\$\$EOE/i.exec(data.result);
-                if (vectorTable && vectorTable[1]) {
-                    const lines = vectorTable[1].trim().split('\n');
-                    if (lines.length > 0) {
-                        // First line contains the vector data
-                        const fields = lines[0].split(',');
-                        if (fields.length >= 7) {
-                            // Position (X, Y, Z) in km
-                            result.position.x = parseFloat(fields[2]) * 1000; // Convert to meters
-                            result.position.y = parseFloat(fields[3]) * 1000;
-                            result.position.z = parseFloat(fields[4]) * 1000;
-                            
-                            // Velocity (VX, VY, VZ) in km/s
-                            result.velocity.x = parseFloat(fields[5]) * 1000; // Convert to m/s
-                            result.velocity.y = parseFloat(fields[6]) * 1000;
-                            result.velocity.z = parseFloat(fields[7]) * 1000;
-                        }
-                    }
-                }
-                
-                // Store raw data for reference (might be useful later)
-                result.meta.rawData = data.result;
-            }
-            
-            // If we couldn't get a mass from the API, use predefined values
-            if (result.mass === 0) {
-                result.mass = this.getDefaultMass(bodyName);
-            }
-            
-            // If we couldn't get a radius from the API, use predefined values
-            if (result.radius === 0) {
-                result.radius = this.getDefaultRadius(bodyName);
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('Error parsing Horizons response:', error);
-            // Return default data if parsing fails
-            return this.getDefaultCelestialBodyData(bodyName);
-        }
-    }
-    
-    /**
-     * Get default mass for a celestial body in case API data is unavailable
-     * 
-     * @param {string} bodyName - Name of the celestial body
-     * @returns {number} - Mass in kg
-     */
-    getDefaultMass(bodyName) {
-        const masses = {
-            'sun': 1.989e30,
-            'mercury': 3.3011e23,
-            'venus': 4.8675e24,
-            'earth': 5.97237e24,
-            'moon': 7.342e22,
-            'mars': 6.4171e23,
-            'jupiter': 1.8982e27,
-            'saturn': 5.6834e26,
-            'uranus': 8.6810e25,
-            'neptune': 1.02413e26,
-            'pluto': 1.303e22
-        };
-        
-        return masses[bodyName.toLowerCase()] || 0;
-    }
-    
-    /**
-     * Get default radius for a celestial body in case API data is unavailable
-     * 
-     * @param {string} bodyName - Name of the celestial body
-     * @returns {number} - Radius in meters
-     */
-    getDefaultRadius(bodyName) {
-        const radii = {
-            'sun': 696340000,
-            'mercury': 2439700,
-            'venus': 6051800,
-            'earth': 6371000,
-            'moon': 1737400,
-            'mars': 3389500,
-            'jupiter': 69911000,
-            'saturn': 58232000,
-            'uranus': 25362000,
-            'neptune': 24622000,
-            'pluto': 1188300
-        };
-        
-        return radii[bodyName.toLowerCase()] || 0;
-    }
-    
-    /**
-     * Get default celestial body data in case API fails
-     * 
-     * @param {string} bodyName - Name of the celestial body
-     * @returns {object} - Default data
-     */
-    getDefaultCelestialBodyData(bodyName) {
-        const defaults = {
-            'sun': {
-                name: 'Sun',
-                position: { x: 0, y: 0, z: 0 },
-                velocity: { x: 0, y: 0, z: 0 },
-                mass: 1.989e30,
-                radius: 696340000
-            },
-            'earth': {
-                name: 'Earth',
-                position: { x: 149.6e9, y: 0, z: 0 },
-                velocity: { x: 0, y: 29800, z: 0 },
-                mass: 5.97237e24,
-                radius: 6371000
-            },
-            'moon': {
-                name: 'Moon',
-                position: { x: 149.6e9 + 384400000, y: 0, z: 0 },
-                velocity: { x: 0, y: 29800 + 1022, z: 0 },
-                mass: 7.342e22,
-                radius: 1737400
-            }
-        };
-        
-        return defaults[bodyName.toLowerCase()] || {
-            name: bodyName,
-            position: { x: 0, y: 0, z: 0 },
-            velocity: { x: 0, y: 0, z: 0 },
-            mass: 0,
-            radius: 0
-        };
-    }
-    
-    /**
-     * Fetch image for a celestial body from NASA Image Library
-     * 
-     * @param {string} bodyName - Name of celestial body
-     * @returns {Promise<string>} - URL to image
-     */
-    async fetchCelestialBodyImage(bodyName) {
-        try {
-            // Check cache first
-            if (this.cache.images.has(bodyName)) {
-                return this.cache.images.get(bodyName);
-            }
-            
-            // Prepare search query
-            const params = new URLSearchParams({
-                q: bodyName,
-                media_type: 'image',
-                year_start: '2000',
-                year_end: new Date().getFullYear().toString()
-            });
-            
-            console.log(`Fetching image for ${bodyName} from NASA Image Library...`);
-            
-            // Make API request
-            const response = await fetch(`${this.imageLibraryEndpoint}?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`NASA API Error: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            
-            // Extract image URL from response
-            let imageUrl = null;
-            if (data.collection && data.collection.items && data.collection.items.length > 0) {
-                // Find a suitable image (prefer planetary surface images)
-                let bestItem = null;
-                
-                // First pass: Look for specific type of image based on celestial body
-                for (const item of data.collection.items) {
-                    if (item.data && item.data.length > 0 && item.links && item.links.length > 0) {
-                        const title = item.data[0].title?.toLowerCase() || '';
-                        const description = item.data[0].description?.toLowerCase() || '';
-                        
-                        // Different search terms for different bodies
-                        let relevantTerms = [];
-                        if (bodyName.toLowerCase() === 'earth') {
-                            relevantTerms = ['blue marble', 'whole earth', 'earth from space'];
-                        } else if (bodyName.toLowerCase() === 'moon') {
-                            relevantTerms = ['full moon', 'lunar surface', 'moon surface'];
-                        } else {
-                            relevantTerms = ['global', 'surface', 'full disk'];
-                        }
-                        
-                        // Check if this is a relevant image
-                        const isRelevant = relevantTerms.some(term => 
-                            title.includes(term) || description.includes(term)
-                        );
-                        
-                        if (isRelevant) {
-                            bestItem = item;
-                            break;
-                        }
-                    }
-                }
-                
-                // If no specific image found, just take the first one
-                if (!bestItem && data.collection.items.length > 0) {
-                    bestItem = data.collection.items[0];
-                }
-                
-                // Get image URL
-                if (bestItem && bestItem.links && bestItem.links.length > 0) {
-                    imageUrl = bestItem.links[0].href;
-                    
-                    // Convert to larger size if it's a thumbnail
-                    if (imageUrl.includes('thumb')) {
-                        imageUrl = imageUrl.replace('thumb', 'orig');
-                    }
-                }
-            }
-            
-            // Cache the result
-            if (imageUrl) {
-                this.cache.images.set(bodyName, imageUrl);
-                console.log(`Found image for ${bodyName}: ${imageUrl}`);
-            } else {
-                console.log(`No image found for ${bodyName}`);
-            }
-            
-            return imageUrl;
-        } catch (error) {
-            console.error(`Error fetching image for ${bodyName}:`, error);
-            return null;
-        }
-    }
-    
-    /**
-     * Fetch Astronomy Picture of the Day
-     * 
-     * @returns {Promise<object>} - APOD data including URL and title
-     */
-    async fetchAPOD() {
-        try {
-            // Check cache first
-            if (this.cache.apod) {
-                return this.cache.apod;
-            }
-            
-            // Prepare request parameters
-            const params = new URLSearchParams({
-                api_key: this.apiKey
-            });
-            
-            console.log('Fetching Astronomy Picture of the Day...');
-            
-            // Make API request
-            const response = await fetch(`${this.apodEndpoint}?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`NASA API Error: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            
-            // Extract relevant data
-            const apodData = {
-                url: data.url,
-                title: data.title,
-                explanation: data.explanation,
-                date: data.date,
-                copyright: data.copyright || 'NASA'
-            };
-            
-            // If it's a video, try to get a thumbnail
-            if (data.media_type === 'video') {
-                // For YouTube videos, we can generate a thumbnail
-                if (data.url.includes('youtube.com') || data.url.includes('youtu.be')) {
-                    const videoId = this.extractYouTubeVideoId(data.url);
-                    if (videoId) {
-                        apodData.url = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-                    }
-                }
-            }
-            
-            // Cache the result
-            this.cache.apod = apodData;
-            
-            console.log('Successfully fetched APOD data');
-            return apodData;
-        } catch (error) {
-            console.error('Error fetching APOD:', error);
-            return null;
-        }
-    }
-    
-    /**
-     * Extract YouTube video ID from a YouTube URL
-     * 
-     * @param {string} url - YouTube URL
-     * @returns {string|null} - Video ID or null if not found
-     */
-    extractYouTubeVideoId(url) {
-        // Match common YouTube URL formats
-        // - https://www.youtube.com/watch?v=VIDEO_ID
-        // - https://youtu.be/VIDEO_ID
-        // - https://www.youtube.com/embed/VIDEO_ID
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-        const match = url.match(regExp);
-        
-        return (match && match[2].length === 11) ? match[2] : null;
-    }
-    
-    /**
-     * Fetch data for multiple celestial bodies at once
-     * 
-     * @param {Array<string>} bodyNames - Array of celestial body names
-     * @returns {Promise<object>} - Object with body names as keys and data as values
-     */
-    async fetchMultipleBodies(bodyNames) {
-        const results = {};
-        
-        // Process bodies in parallel
-        const promises = bodyNames.map(async (name) => {
-            try {
-                const data = await this.fetchEphemerisData(name);
-                results[name] = data;
-            } catch (error) {
-                console.error(`Error fetching data for ${name}:`, error);
-                // Use default data as fallback
-                results[name] = this.getDefaultCelestialBodyData(name);
-            }
-        });
-        
-        await Promise.all(promises);
-        return results;
-    }
-    
-    /**
-     * Helper method to load texture images for each celestial body
-     * 
-     * @param {Array<string>} bodyNames - Array of celestial body names
-     * @returns {Promise<object>} - Object with body names as keys and image URLs as values
-     */
-    async fetchAllCelestialBodyImages(bodyNames) {
-        const results = {};
-        
-        // Process images in parallel
-        const promises = bodyNames.map(async (name) => {
-            try {
-                const imageUrl = await this.fetchCelestialBodyImage(name);
-                if (imageUrl) {
-                    results[name] = imageUrl;
-                }
-            } catch (error) {
-                console.error(`Error fetching image for ${name}:`, error);
-            }
-        });
-        
-        await Promise.all(promises);
-        return results;
-    }
-}
+        this.apiKey = localApiConfig.getNasaApiKey ? localApiConfig.getNasaApiKey() : 'DEMO_KEY';
+        if (this.apiKey === 'DEMO_KEY') console.warn("NasaApiService: Using DEMO_KEY.");
 
-// Export for use in Node.js environments
-if (typeof module !== 'undefined') {
-    module.exports = { NasaApiService };
-} 
+        this.horizonsEndpoint = localApiConfig.JPL_HORIZONS_API || 'https://ssd.jpl.nasa.gov/api/horizons.api';
+        this.imageLibraryEndpoint = localApiConfig.NASA_IMAGES_API || 'https://images-api.nasa.gov/search';
+        this.apodEndpoint = localApiConfig.NASA_APOD_API || 'https://api.nasa.gov/planetary/apod';
+
+        this.cache = { ephemeris: new Map(), images: new Map(), apod: null };
+        this.bodyIds = { 'sun': '10', 'mercury': '199', 'venus': '299', 'earth': '399', 'moon': '301', 'mars': '499', 'jupiter': '599', 'saturn': '699', 'uranus': '799', 'neptune': '899', 'pluto': '999' };
+
+        console.log('NasaApiService initialized.');
+    }
+
+    async fetchEphemerisData(bodyIdentifier, startDate = new Date(), endDate = null) {
+        const bodyName = this.lookupBodyName(bodyIdentifier) || bodyIdentifier.toLowerCase();
+        const bodyId = this.lookupBodyId(bodyIdentifier);
+        if (!bodyId) { console.error(`NasaApiService: Unknown body ID: ${bodyIdentifier}`); return this.getDefaultCelestialBodyData(bodyName); }
+
+        try {
+            if (!endDate) { endDate = new Date(startDate); endDate.setDate(endDate.getDate() + 1); }
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            const startStr = formatDate(startDate); const endStr = formatDate(endDate);
+            const cacheKey = `${bodyId}_${startStr}_${endStr}`;
+
+            if (this.cache.ephemeris.has(cacheKey)) { console.log(`NasaApiService: Using cached ephemeris for ${bodyName}`); return this.cache.ephemeris.get(cacheKey); }
+
+            const params = new URLSearchParams({
+                format: 'json', COMMAND: `'${bodyId}'`, OBJ_DATA: 'YES', MAKE_EPHEM: 'YES',
+                EPHEM_TYPE: 'VECTORS', CENTER: '500@0', START_TIME: `"${startStr}"`,
+                STOP_TIME: `"${endStr}"`, STEP_SIZE: '1d', VEC_TABLE: '2', REF_PLANE: 'ECLIPTIC',
+                REF_SYSTEM: 'J2000', OUT_UNITS: 'KM-S', VEC_CORR: 'NONE', CSV_FORMAT: 'YES'
+            });
+
+            console.log(`NasaApiService: Fetching ephemeris for ${bodyName}...`);
+            const response = await fetch(`${this.horizonsEndpoint}?${params.toString()}`);
+            if (!response.ok) { const txt = await response.text(); console.error(`Horizons Error ${response.status} for ${bodyName}: ${txt}`); throw new Error(`Horizons API Error: ${response.status}.`); }
+            const data = await response.json();
+            if (data.error || !data.result) { console.error(`Horizons response error for ${bodyName}:`, data.error || "Missing 'result'."); throw new Error(`Horizons response error for ${bodyName}.`); }
+
+            const ephemerisData = this.parseHorizonsResponse(data.result, bodyName);
+            this.cache.ephemeris.set(cacheKey, ephemerisData);
+            console.log(`NasaApiService: Fetched/parsed ephemeris for ${bodyName}.`);
+            return ephemerisData;
+
+        } catch (error) { console.error(`NasaApiService: Failed fetchEphemerisData for ${bodyIdentifier}:`, error); return this.getDefaultCelestialBodyData(bodyName); }
+    }
+
+    lookupBodyId(name) { if (!name) return null; return this.bodyIds[name.toLowerCase()] || null; }
+    lookupBodyName(identifier) { if (!identifier) return null; const l = identifier.toLowerCase(); for (const n in this.bodyIds) { if (n === l || this.bodyIds[n] === l) return n; } return null; }
+
+    parseHorizonsResponse(resultText, bodyName) {
+        try {
+            const parsed = { name: bodyName.charAt(0).toUpperCase()+bodyName.slice(1), position:{x:NaN,y:NaN,z:NaN}, velocity:{x:NaN,y:NaN,z:NaN}, mass:NaN, radius:NaN, meta:{rawData:resultText, isDefault:false} };
+            // Parse Physical Props
+            const propRe = /Target body name:\s*.+?\s*([\s\S]+?)(?:Center body name|Revised:|Ephemeris|START|---)/i; const pM = resultText.match(propRe);
+            if (pM && pM[1]) { const pTxt=pM[1]; const rRe=/(?:Mean radius|Radius)\s*,\s*.*?=\s*([0-9.]+)\s*(?:km)?/i; const rM=pTxt.match(rRe); if(rM&&rM[1])parsed.radius=parseFloat(rM[1])*1000; else console.warn(`No radius for ${bodyName}`); const mRe=/Mass(?:,|\s*\(10\^)(\d+)\s*kg\)\s*~?=\s*([0-9.]+)\s*(?:x|\*|E|e)?10\^([+-]?[0-9]+)/i; const mM=pTxt.match(mRe); if(mM&&mM[2]&&mM[3])parsed.mass=parseFloat(mM[2])*Math.pow(10,parseFloat(mM[3])); else { const altMRe=/Mass x 10\^([0-9]+)\s*\(?kg\)?\s*=\s*([0-9.]+)/i; const aMM=pTxt.match(altMRe); if(aMM&&aMM[1]&&aMM[2])parsed.mass=parseFloat(aMM[2])*Math.pow(10,parseFloat(aMM[1])); else console.warn(`No mass for ${bodyName}`); } } else console.warn(`No Props section for ${bodyName}`);
+            // Parse Vectors
+            const sM="$$SOE"; const eM="$$EOE"; const sI=resultText.indexOf(sM); const eI=resultText.indexOf(eM);
+            if (sI!==-1&&eI!==-1&&sI<eI){ const dataTxt=resultText.substring(sI+sM.length,eI).trim(); const lines=dataTxt.split('\n'); if(lines.length>0){ const f=lines[0].split(',').map(t=>t.trim()); if(f.length>=8){ parsed.position.x=parseFloat(f[2])*1000; parsed.position.y=parseFloat(f[3])*1000; parsed.position.z=parseFloat(f[4])*1000; parsed.velocity.x=parseFloat(f[5])*1000; parsed.velocity.y=parseFloat(f[6])*1000; parsed.velocity.z=parseFloat(f[7])*1000; } else console.warn(`Bad vector fields for ${bodyName}: ${lines[0]}`); } else console.warn(`No data lines for ${bodyName}`); } else console.warn(`No SOE/EOE for ${bodyName}`);
+            // Fallbacks
+            if(isNaN(parsed.mass)){ parsed.mass=this.getDefaultMass(bodyName); } if(isNaN(parsed.radius)){ parsed.radius=this.getDefaultRadius(bodyName); } if(isNaN(parsed.position.x)||isNaN(parsed.velocity.x)){ const d=this.getDefaultCelestialBodyData(bodyName); parsed.position=d.position; parsed.velocity=d.velocity; parsed.meta.isDefault=true; }
+            return parsed;
+        } catch (e) { console.error(`Error parsing Horizons for ${bodyName}:`, e); return this.getDefaultCelestialBodyData(bodyName); }
+    }
+
+    getDefaultMass(bn) { const m={'sun':1.989e30,'earth':5.972e24,'moon':7.342e22, /*...*/}; return m[bn.toLowerCase()]||0; }
+    getDefaultRadius(bn) { const r={'sun':696340e3,'earth':6371e3,'moon':1737e3, /*...*/}; return r[bn.toLowerCase()]||0; }
+    getDefaultCelestialBodyData(bn) { console.warn(`NasaApiService: Using default data for ${bn}.`); const n=bn.charAt(0).toUpperCase()+bn.slice(1); const m=this.getDefaultMass(bn); const r=this.getDefaultRadius(bn); let p={x:0,y:0,z:0},v={x:0,y:0,z:0}; if(bn.toLowerCase()==='earth'){p={x:149.6e9,y:0,z:0};v={x:0,y:29800,z:0};} else if(bn.toLowerCase()==='moon'){p={x:149.6e9+384.4e6,y:0,z:0};v={x:0,y:29800+1022,z:0};} return {name:n,position:p,velocity:v,mass:m,radius:r,meta:{isDefault:true}}; }
+
+    /** Fetch image(s) from NASA Image Library, prioritizing textures/maps */
+    async fetchCelestialBodyImages(bodyName, count = 1) {
+        try {
+            const cacheKey = `${bodyName}_texture_${count}`; // Use specific cache key
+            if (this.cache.images.has(cacheKey)) {
+                console.log(`NasaApiService: Using cached texture images for ${bodyName}`);
+                return this.cache.images.get(cacheKey);
+            }
+
+            // MODIFIED: Enhanced search terms
+            const searchTerms = "planet texture map global mosaic cylindrical equirectangular surface";
+            const params = new URLSearchParams({
+                q: `${bodyName} ${searchTerms}`, // Query combines name and terms
+                media_type: 'image',
+                page_size: Math.max(count * 2, 20) // Fetch more to sort from
+            });
+
+            console.log(`NasaApiService: Fetching texture images for ${bodyName}...`);
+            const response = await fetch(`${this.imageLibraryEndpoint}?${params.toString()}`);
+            if (!response.ok) throw new Error(`NASA Image Library Error: ${response.status}`);
+
+            const data = await response.json();
+            let images = [];
+            if (data.collection?.items) {
+                images = data.collection.items
+                    .filter(item => item.links?.[0]?.href && item.data?.[0]?.title)
+                    .map(item => ({
+                        url: item.links[0].href,
+                        title: item.data[0].title,
+                        description: item.data[0].description || '',
+                        keywords: (item.data[0].keywords || []).join(' ').toLowerCase(),
+                        bestUrl: (item.links[0].href || '').replace(/~(thumb|small)/, '~large') // Prefer large version
+                    }));
+            }
+
+            // MODIFIED: Sort results prioritizing relevant keywords
+            const textureKeywords = ['map', 'texture', 'mosaic', 'global', 'cylindrical', 'equirectangular', 'surface', 'albedo', 'color'];
+            images.sort((a, b) => {
+                let scoreA = 0; let scoreB = 0;
+                const textA = `${a.title} ${a.description} ${a.keywords}`.toLowerCase();
+                const textB = `${b.title} ${b.description} ${b.keywords}`.toLowerCase();
+                textureKeywords.forEach(term => { if (textA.includes(term)) scoreA++; if (textB.includes(term)) scoreB++; });
+                return scoreB - scoreA; // Higher score comes first
+            });
+
+            const finalImages = images.slice(0, count).map(img => ({ url: img.bestUrl, title: img.title, description: img.description }));
+
+            this.cache.images.set(cacheKey, finalImages);
+            console.log(`NasaApiService: Found ${finalImages.length} texture image(s) for ${bodyName}. Best: ${finalImages[0]?.url?.substring(0,60)}...`);
+            return finalImages;
+
+        } catch (error) { console.error(`NasaApiService: Error fetching texture images for ${bodyName}:`, error); return this.getMockImages(bodyName, count); }
+    }
+
+    async fetchAPOD() { try{const t=new Date().toISOString().split('T')[0];if(this.cache.apod?.date===t)return this.cache.apod;const p=new URLSearchParams({api_key:this.apiKey});console.log('Fetching APOD...');const rsp=await fetch(`${this.apodEndpoint}?${p.toString()}`);if(!rsp.ok)throw rsp.status; const d=await rsp.json(); if(!d?.url)throw "No URL"; const aD={url:d.url,hdurl:d.hdurl||d.url,title:d.title||'APOD',explanation:d.explanation||'',date:d.date,copyright:d.copyright||'Public Domain',media_type:d.media_type,thumbnail_url:d.thumbnail_url||null}; /* Gen thumb */ if(aD.media_type==='video'&&!aD.thumbnail_url&&aD.url.includes('youtube')){const v=this.extractYouTubeVideoId(aD.url);if(v)aD.thumbnail_url=`https://img.youtube.com/vi/${v}/hqdefault.jpg`;}else if(aD.media_type==='image'&&!aD.thumbnail_url){aD.thumbnail_url=aD.url;} this.cache.apod=aD;console.log(`APOD fetched ${aD.date}`); return aD;}catch(e){console.error("APOD Error:",e);return this.getMockAPOD();} }
+    extractYouTubeVideoId(url) { const r=/^.*(?:youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;const m=url.match(r);return(m&&m[1].length===11)?m[1]:null;}
+    async fetchMultipleBodies(ids, date=new Date()) {  const r={};console.log(`Batch fetch bodies: ${ids.join()}`);const p=ids.map(async id=>{const n=this.lookupBodyName(id)||id;r[n.toLowerCase()]=await this.fetchEphemerisData(id,date);}); await Promise.allSettled(p);console.log("Batch body fetch complete.");return r;}
+    async fetchAllCelestialBodyImages(names) { const r={};console.log(`Batch fetch images: ${names.join()}`);const p=names.map(async n=>{const imgs=await this.fetchCelestialBodyImages(n,1);r[n.toLowerCase()]=imgs[0]?.url||this.getMockImages(n,1)[0]?.url;}); await Promise.allSettled(p);console.log("Batch image fetch complete.");return r;}
+    getMockImages(body, count) {  console.warn(`Using MOCK images for ${body}`); const db={'earth':[{url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='}], 'moon':[{url:'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='}]}; return (db[body.toLowerCase()]||[{url:`data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7`} /*...*/]).slice(0,count); }
+    getMockAPOD() { console.warn("Using MOCK APOD."); return {url:"...",hdurl:"...",thumbnail_url:"...",title:"Mock APOD",explanation:"...",date:"...",copyright:"...",media_type:"image"}; }
+}
+if (typeof module !== 'undefined' && module.exports) { module.exports = { NasaApiService }; } if (typeof window !== 'undefined' && typeof window.NasaApiService === 'undefined') { window.NasaApiService = NasaApiService; }
+console.log("NasaApiService.js loaded.");

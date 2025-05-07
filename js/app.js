@@ -1,554 +1,115 @@
 /**
- * Main Application Module
- * 
- * Initializes and coordinates the space simulation
+ * Main Application Module (app.js)
+ * Initializes simulation, sets up UI event listeners, handles UI interactions.
  */
+const localConfig = (typeof config !== 'undefined') ? config : (window && window.config) ? window.config : {};
+let simulation = null; let isSimulationRunning = false; let debugInfo = {};
+(function() { /* ... polyfill ... */ }());
 
-// Import Config
-const config = config || {};
-
-let simulation;
-let renderer;
-let gameLoop;
-let isSimulationRunning = false;
-let debugInfo = {};
-
-// Polyfill for requestAnimationFrame
-(function() {
-    var lastTime = 0;
-    var vendors = ['ms', 'moz', 'webkit', 'o'];
-    for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
-        window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
-        window.cancelAnimationFrame = window[vendors[x]+'CancelAnimationFrame'] 
-                                   || window[vendors[x]+'CancelRequestAnimationFrame'];
-    }
- 
-    if (!window.requestAnimationFrame) {
-        console.warn("requestAnimationFrame not available, using setTimeout fallback");
-        window.requestAnimationFrame = function(callback) {
-            var currTime = new Date().getTime();
-            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
-            var id = window.setTimeout(function() { callback(currTime + timeToCall); }, 
-              timeToCall);
-            lastTime = currTime + timeToCall;
-            return id;
-        };
-    }
- 
-    if (!window.cancelAnimationFrame) {
-        window.cancelAnimationFrame = function(id) {
-            clearTimeout(id);
-        };
-    }
-}());
-
-/**
- * Initialize the application and set up event listeners
- */
 function initApp() {
-    console.log('Initializing Space Flight Simulator app...');
-    updateDebugInfo('Status', 'Initializing...');
-    
-    // Make sure the config is available
-    if (!window.config) {
-        const errorMsg = 'Configuration not loaded properly. Check script loading order.';
-        console.error(errorMsg);
-        updateDebugInfo('Error', errorMsg);
-        alert(errorMsg);
-        return;
-    }
-    
+    console.log('app.js: Initializing...'); updateDebugInfo('Status', 'Initializing...');
+    if(typeof Simulation==='undefined'){const e='ERROR: Simulation class missing.';console.error(e);updateDebugInfo('Error',e);alert(e);return;}
     try {
-        // Initialize NasaApiService if available
-        const nasaApiService = window.NasaApiService ? new NasaApiService() : null;
-        updateDebugInfo('NASA API', nasaApiService ? 'Available' : 'Not available');
-        
-        // Create simulation (it will create its own physics engine and spacecraft)
-        updateDebugInfo('Simulation', 'Creating...');
-        simulation = new Simulation();
-        updateDebugInfo('Simulation', 'Created successfully');
-        console.log('Simulation created successfully');
-        
-        // Set up event listeners
-        updateDebugInfo('Events', 'Setting up event listeners...');
-        setupEventListeners();
-        updateDebugInfo('Events', 'Event listeners set up');
-        
-        // Load APOD as background if NASA API is available
-        if (nasaApiService) {
-            updateDebugInfo('NASA API', 'Loading APOD...');
-            loadAstronomyPictureOfDay();
-        }
-        
-        // Show physics equations on startup
-        updateDebugInfo('UI', 'Showing physics equations...');
-        showPhysicsEquations();
-        
-        // Start frame rate monitoring
+        updateDebugInfo('Simulation', 'Creating...'); console.log("app.js: Creating Simulation..."); simulation=new Simulation(); if(!simulation)throw "Failed Sim create"; updateDebugInfo('Simulation', 'Instance OK'); console.log('app.js: Sim instance created.');
+        updateDebugInfo('Events', 'Setting up...'); console.log("app.js: Setup listeners..."); setupEventListeners(); updateDebugInfo('Events', 'Listeners OK');
+        if(simulation&&!simulation.renderer){console.log("app.js: Explicit renderer init..."); simulation.initializeRenderer();}
+        if(simulation?.nasaApiService){updateDebugInfo('NASA API','Load APOD...'); console.log("app.js: Load APOD..."); loadAstronomyPictureOfDay();} else {updateDebugInfo('NASA API','N/A');}
+        updateDebugInfo('UI','Show Physics...'); console.log("app.js: Show physics modal..."); showPhysicsEquations();
         startFrameMonitor();
-        
-        updateDebugInfo('Status', 'Initialization complete');
-        console.log('Application initialized successfully');
-    } catch (error) {
-        const errorMsg = `Failed to initialize: ${error.message}`;
-        console.error(errorMsg, error);
-        updateDebugInfo('Error', errorMsg);
-        
-        // Show more detailed error in a div rather than an alert
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#500; color:white; padding:20px; border-radius:10px; z-index:9999; max-width:80%; text-align:center;';
-        errorDiv.innerHTML = `
-            <h3>Error Initializing Simulator</h3>
-            <p>${error.message}</p>
-            <p>Check the console for more details.</p>
-            <p>Try refreshing the page or check browser compatibility.</p>
-            <button onclick="this.parentNode.style.display='none'">Dismiss</button>
-        `;
-        document.body.appendChild(errorDiv);
-    }
+        updateDebugInfo('Status','Init Complete'); console.log('app.js: App init OK.');
+    } catch (error) { const m=`App Init Fail: ${error.message}`; console.error(m, error); updateDebugInfo('Error', m); updateDebugInfo('Status','FAILED'); displayInitializationError(error); }
 }
-
-/**
- * Monitor frame rate and update debug info
- */
-function startFrameMonitor() {
-    let lastFrameCount = 0;
-    let lastFrameTime = performance.now();
-    let frameRate = 0;
-    
-    // Update frame rate every second
-    setInterval(() => {
-        if (!simulation) return;
-        
-        const currentFrameCount = simulation.frameCount || 0;
-        const currentTime = performance.now();
-        const elapsed = (currentTime - lastFrameTime) / 1000; // in seconds
-        
-        // Calculate frames per second
-        frameRate = Math.round((currentFrameCount - lastFrameCount) / elapsed);
-        
-        // Update debug info
-        updateDebugInfo('Frame Rate', `${frameRate} FPS`);
-        updateDebugInfo('Frames', currentFrameCount);
-        
-        // Store values for next calculation
-        lastFrameCount = currentFrameCount;
-        lastFrameTime = currentTime;
-    }, 1000);
-}
-
-/**
- * Update debug information
- * 
- * @param {string} key - Debug information category
- * @param {string} value - Debug value
- */
-function updateDebugInfo(key, value) {
-    debugInfo[key] = value;
-    
-    // Update debug panel if it exists
-    const debugInfoElement = document.getElementById('debug-info');
-    if (debugInfoElement) {
-        let html = '';
-        for (const [k, v] of Object.entries(debugInfo)) {
-            html += `<div><strong>${k}:</strong> ${v}</div>`;
-        }
-        debugInfoElement.innerHTML = html;
-    }
-}
-
-/**
- * Show physics equations and explanations in a modal
- */
+function displayInitializationError(error) { try{const d=document.createElement('div');d.style.cssText='position:fixed;top:10%;left:10%;right:10%;background:#800;color:white;padding:20px;border-radius:8px;z-index:10000;border:1px solid red;text-align:center;';d.innerHTML=`<h3>INIT FAILED</h3><p>${error.message}</p><p>Check console (F12).</p><button onclick="this.parentNode.remove()">X</button>`;document.body.appendChild(d);}catch(e){alert(`INIT ERROR: ${error.message}\nCheck console.`);} }
+function startFrameMonitor() { let lastC=0,lastT=performance.now(),rate=0; setInterval(()=>{if(!simulation?.renderer||!simulation.isRunning||simulation.isPaused){updateDebugInfo('Frame Rate','N/A');return;} const curC=simulation.frameCount||0; const curT=performance.now(); const elap=(curT-lastT)/1000; if(elap>=0.5){rate=Math.round((curC-lastC)/elap); updateDebugInfo('Frame Rate',`${rate} FPS`); lastC=curC; lastT=curT;} updateDebugInfo('Frames',curC);}, 500); console.log("app.js: Frame monitor started."); }
+function updateDebugInfo(key, value) { debugInfo[key]=String(value); const el=document.getElementById('debug-info'); if(el){let h=''; for(const [k,v] of Object.entries(debugInfo).sort()){let vh=v; if(v==='true'||v==='Running'||v.includes('success'))vh=`<strong style="color:#0F0;">${v}</strong>`; else if(v==='false'||v==='Stopped'||v.includes('FAIL'))vh=`<strong style="color:#F00;">${v}</strong>`; else if(v==='Paused'||v.includes('Warn'))vh=`<strong style="color:#FF0;">${v}</strong>`; h+=`<div style="margin-bottom:2px;"><strong style="color:#0CF;">${k}:</strong> ${vh}</div>`; } el.innerHTML=h;} }
 function showPhysicsEquations() {
-    const modal = document.getElementById('modal');
-    const modalContent = document.getElementById('modal-content');
-    
-    if (!modal || !modalContent) {
-        console.error('Modal elements not found');
-        updateDebugInfo('Error', 'Modal elements not found');
-        return;
-    }
-    
-    modalContent.innerHTML = `
-        <h2>The Physics of Space Flight</h2>
-        <p>This simulator uses real physics equations to model spacecraft motion. Here are the key equations:</p>
-        
-        <div class="equation-section">
-            <h3>Newton's Second Law</h3>
-            <div class="equation">F = ma</div>
-            <p>Force equals mass times acceleration. This is the fundamental equation that drives spacecraft motion.</p>
-        </div>
-        
-        <div class="equation-section">
-            <h3>Universal Gravitation</h3>
-            <div class="equation">F<sub>g</sub> = G(m₁m₂)/r²</div>
-            <p>Where G = 6.67×10⁻¹¹ N·m²/kg² is the gravitational constant. This equation calculates the gravitational force between objects.</p>
-        </div>
-        
-        <div class="equation-section">
-            <h3>Kinematic Equations</h3>
-            <div class="equation">v = v₀ + at</div>
-            <div class="equation">s = s₀ + v₀t + ½at²</div>
-            <p>These equations update velocity and position based on acceleration and time.</p>
-        </div>
-        
-        <div class="equation-section">
-            <h3>Circular Orbit Velocity</h3>
-            <div class="equation">v = √(GM/r)</div>
-            <p>The velocity needed to maintain a circular orbit at distance r from a body of mass M.</p>
-        </div>
-        
-        <div class="equation-section">
-            <h3>Conservation of Momentum</h3>
-            <div class="equation">m₁v₁ = m₂v₂</div>
-            <p>As fuel is expelled from the spacecraft, momentum is conserved - creating thrust.</p>
-        </div>
-        
-        <div class="equation-section">
-            <h3>Escape Velocity</h3>
-            <div class="equation">v<sub>escape</sub> = √(2GM/r)</div>
-            <p>The minimum velocity needed to escape a gravitational field without further propulsion.</p>
-        </div>
-        
-        <button id="start-simulation-btn" class="primary-btn">Start Simulation</button>
-    `;
-    
-    // Show the modal
-    modal.style.display = 'block';
-    
-    // Close button functionality
-    const closeBtn = modal.querySelector('.close');
-    if (closeBtn) {
-        closeBtn.onclick = function() {
-            modal.style.display = 'none';
-        };
-    }
-    
-    // Start simulation button
-    const startBtn = document.getElementById('start-simulation-btn');
-    if (startBtn) {
-        startBtn.addEventListener('click', function() {
-            modal.style.display = 'none';
-            console.log('Starting simulation from physics modal...');
-            
-            // Ensure renderer is initialized before starting
-            if (simulation && !simulation.renderer) {
-                console.log('Initializing renderer from physics modal...');
-                simulation.initializeRenderer();
+    console.log("app.js: Showing physics modal...");
+    const modal=document.getElementById('modal'); const mc=document.getElementById('modal-content');
+    if(!modal||!mc){console.error('app.js: Modal missing.');updateDebugInfo('Error','Modal missing');return;}
+    mc.innerHTML=`<span class="close" onclick="document.getElementById('modal').style.display='none'">×</span><h2>Physics</h2><div class="equation-section">...</div><button id="start-simulation-btn-modal" class="primary-btn">Start Simulation</button>`; // Add equations as needed
+    modal.style.display='block';
+    const btnM=document.getElementById('start-simulation-btn-modal');
+    if(btnM){console.log("app.js: Attach listener modal start"); btnM.replaceWith(btnM.cloneNode(true)); document.getElementById('start-simulation-btn-modal').addEventListener('click',()=>{console.log("app.js: MODAL Start Click!"); modal.style.display='none'; if(simulation&&!simulation.renderer)simulation.initializeRenderer(); startSimulation();});} else {console.error('Modal start btn missing!');updateDebugInfo('Error','Modal start missing');}
+    modal.onclick=(e)=>{if(e.target===modal)modal.style.display="none";}; updateDebugInfo('Modal','Physics displayed');
+}
+async function loadAstronomyPictureOfDay() { console.log("app.js: Load APOD..."); if(!simulation?.nasaApiService){console.log(" -> skipped (no API)");updateDebugInfo('APOD','Skipped');return;} try{const apod=await simulation.nasaApiService.fetchAPOD(); if(apod?.url){console.log(" -> APOD OK:",apod.title);updateDebugInfo('APOD',`Loaded ${apod.date}`); const hero=document.querySelector('.simulation-container'); if(hero&&apod.media_type==='image'){let overlay=hero.querySelector('.background-overlay');if(!overlay){overlay=document.createElement('div');overlay.className='background-overlay';hero.insertBefore(overlay,hero.firstChild);} const imgUrl=apod.thumbnail_url||apod.url; overlay.style.backgroundImage=`url(${imgUrl})`;overlay.style.opacity='0.1';}} else {console.warn(" -> Failed APOD load.");updateDebugInfo('APOD','Failed');}}catch(e){console.error("app.js: APOD Error:",e);updateDebugInfo('APOD Error',e.message);} }
+function setupEventListeners() {
+    console.log("app.js: setupEventListeners..."); let c=0; try{ const addL=(id,h)=>{const b=document.getElementById(id);if(b){console.log(` Attach listener #${id}`);b.addEventListener('click',h);c++;}else console.warn(`Btn #${id} missing.`);}; addL('start-btn',handleStartButtonClick); addL('reset-btn',handleResetButtonClick); addL('help-btn',showHelp); addL('physics-btn',showPhysicsEquations); console.log(" Attach keydown"); window.addEventListener('keydown',handleKeyDown); c++; console.log(" Attach keyup"); window.addEventListener('keyup',handleKeyUp); c++; console.log(`app.js: Listeners setup OK (${c}).`); } catch(e){console.error('Listener setup error:',e);updateDebugInfo('Event Error',`Setup Fail: ${e.message}`);}
+}
+function handleStartButtonClick() { console.log("app.js: Header Start Btn Click!"); updateDebugInfo('Action','Header Start'); startSimulation(); }
+function handleResetButtonClick() { console.log("app.js: Reset Btn Click!"); updateDebugInfo('Action','Reset'); resetSimulation(); }
+function startSimulation() {
+    console.log("app.js: startSimulation()."); updateDebugInfo('Action','Start/Pause'); if(!simulation){console.error('Sim null!');updateDebugInfo('Error','Sim null');return;}
+    try {
+        simulation.start(); // Delegate (now async for initial load)
+        // Check state immediately, though it might change if start() is async
+        isSimulationRunning=simulation.isRunning; console.log(`app.js: State after sim.start call: run=${simulation.isRunning}, pause=${simulation.isPaused}`); const btn=document.getElementById('start-btn'); if(btn)btn.textContent=simulation.isRunning?(simulation.isPaused?'Resume':'Pause'):'Start'; updateDebugInfo('Sim State',simulation.isRunning?(simulation.isPaused?'Paused':'Running'):'Stopped');
+    } catch(e){console.error('Start/Pause error:',e);updateDebugInfo('Error',`StartFail: ${e.message}`);alert(`Start Error: ${e.message}`);}
+}
+function resetSimulation() { console.log("app.js: resetSimulation()."); updateDebugInfo('Action','Reset'); if(!simulation){console.error('Sim null!');updateDebugInfo('Error','Sim null');return;} try{simulation.reset(); isSimulationRunning=simulation.isRunning; console.log(`app.js: State after sim.reset: run=${simulation.isRunning}, pause=${simulation.isPaused}`); const btn=document.getElementById('start-btn'); if(btn)btn.textContent='Start Sim'; updateDebugInfo('Sim State','Reset/Stopped'); } catch(e){console.error('Reset error:',e);updateDebugInfo('Error',`ResetFail: ${e.message}`);alert(`Reset Error: ${e.message}`);} }
+function showHelp() { console.log("app.js: showHelp()."); updateDebugInfo('Action','Help'); try{const m=document.getElementById('modal');const mc=document.getElementById('modal-content');const tc=document.getElementById('tutorial-content');if(!m||!mc||!tc)throw "Modal/tutorial missing"; mc.innerHTML=`<span class="close" onclick="document.getElementById('modal').style.display='none'">×</span>${tc.innerHTML}`; m.style.display='block';m.onclick=(e)=>{if(e.target===m)m.style.display="none";}; updateDebugInfo('UI','Help shown'); console.log("app.js: Help shown.");}catch(e){console.error('Help error:',e);updateDebugInfo('Error',`HelpFail: ${e.message}`);alert(`Help Error: ${e.message}`);} }
+function handleKeyDown(event) {
+     if(!event.repeat&&!event.metaKey&&!event.ctrlKey)console.log(`KeyDown: K='${event.key}'`);
+     const relevant=[' ','w','a','s','d','f','+','-','r','h','p','?']; if(relevant.includes(event.key.toLowerCase()))event.preventDefault();
+     const keyL=event.key.toLowerCase();
+     switch(keyL){ case ' ':console.log(" -> Space");startSimulation();return; case 'r':console.log(" -> R");resetSimulation();return; case 'h':case '?':console.log(" -> H/?");showHelp();return; case 'p':console.log(" -> P");showPhysicsEquations();return; }
+     if(!simulation){if(!event.repeat)console.log(" -> KD ignored (Sim null)");return;}
+     if(simulation.isRunning&&!simulation.isPaused){if(!event.repeat)console.log(` -> Delegate KD ${keyL}`); simulation.handleInput(keyL, true);}
+     else if(!event.repeat){console.log(` -> KD ignored (run=${simulation.isRunning}, pause=${simulation.isPaused})`);}
+}
+function handleKeyUp(event) {
+     if(!event.metaKey&&!event.ctrlKey)console.log(`KeyUp: K='${event.key}'`);
+     if(!simulation)return;
+     const keyL=event.key.toLowerCase(); const moveKeys=['w','a','s','d'];
+     if(moveKeys.includes(keyL)){if(simulation.isRunning&&!simulation.isPaused){console.log(` -> Delegate KU ${keyL}`); simulation.handleInput(keyL, false);}}
+}
+
+document.addEventListener('DOMContentLoaded', () => { console.log("app.js: DOM Ready. Init App."); initApp(); });
+
+// ... (likely at the beginning of your app.js or inside a DOMContentLoaded) ...
+console.log('app.js: Script loaded');
+
+// Assuming you have an initialization function or directly attach listeners
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('app.js: DOMContentLoaded event fired');
+
+    const simulation = new Simulation(); // Or however you instantiate your simulation
+    console.log('app.js: Simulation object created:', simulation);
+
+    const startButton = document.getElementById('start-btn');
+    const resetButton = document.getElementById('reset-btn');
+    const helpButton = document.getElementById('help-btn');
+
+    if (startButton) {
+        console.log('app.js: Start button found');
+        startButton.addEventListener('click', () => {
+            console.log('app.js: Start button CLICKED');
+            if (simulation && typeof simulation.start === 'function') {
+                console.log('app.js: Calling simulation.start()');
+                simulation.start();
+            } else {
+                console.error('app.js: simulation object or simulation.start method is invalid!', simulation);
             }
-            
-            startSimulation();
         });
     } else {
-        console.error('Start simulation button not found');
-        updateDebugInfo('Error', 'Start button not found');
+        console.error('app.js: Start button (#start-btn) NOT found!');
     }
-    
-    // Close modal when clicking outside content
-    window.onclick = function(event) {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-    
-    updateDebugInfo('Modal', 'Physics equations displayed');
-}
 
-/**
- * Load Astronomy Picture of the Day from NASA API
- */
-function loadAstronomyPictureOfDay() {
-    try {
-        const nasaApiService = new NasaApiService();
-        nasaApiService.fetchAstronomyPictureOfDay()
-            .then(apodData => {
-                if (apodData && apodData.url) {
-                    updateDebugInfo('APOD', 'Loaded successfully');
-                    // Set background image for the page
-                    const heroSection = document.querySelector('.simulation-container');
-                    if (heroSection) {
-                        // If it's a YouTube video, don't set as background
-                        if (!apodData.url.includes('youtube')) {
-                            const backgroundOverlay = document.createElement('div');
-                            backgroundOverlay.className = 'background-overlay';
-                            backgroundOverlay.style.backgroundImage = `url(${apodData.url})`;
-                            backgroundOverlay.style.opacity = '0.1';
-                            heroSection.appendChild(backgroundOverlay);
-                        }
-                    }
-                }
-            })
-            .catch(error => {
-                console.warn('Failed to load APOD:', error);
-                updateDebugInfo('APOD Error', error.message);
-            });
-    } catch (error) {
-        console.error('Error in loadAstronomyPictureOfDay:', error);
-        updateDebugInfo('APOD Error', error.message);
-    }
-}
-
-/**
- * Set up event listeners for user controls
- */
-function setupEventListeners() {
-    try {
-        // Button event listeners
-        const startBtn = document.getElementById('start-btn');
-        const resetBtn = document.getElementById('reset-btn');
-        const helpBtn = document.getElementById('help-btn');
-        
-        if (!startBtn || !resetBtn || !helpBtn) {
-            throw new Error('One or more control buttons not found in the DOM');
-        }
-        
-        startBtn.addEventListener('click', startSimulation);
-        resetBtn.addEventListener('click', resetSimulation);
-        helpBtn.addEventListener('click', showHelp);
-        
-        // Keyboard event listeners
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
-        
-        console.log('Event listeners set up');
-    } catch (error) {
-        console.error('Error setting up event listeners:', error);
-        updateDebugInfo('Event Error', error.message);
-    }
-}
-
-/**
- * Start or pause the simulation
- */
-function startSimulation() {
-    console.log('Start button clicked - Simplified Implementation');
-    updateDebugInfo('Action', 'Start button clicked');
-    
-    if (!simulation) {
-        console.error('Simulation not initialized, creating a new simulation');
-        updateDebugInfo('Simulation', 'Creating new simulation');
-        
-        try {
-            simulation = new Simulation();
-            updateDebugInfo('Simulation', 'Created successfully');
-        } catch (error) {
-            const errorMsg = `Failed to create simulation: ${error.message}`;
-            console.error(errorMsg);
-            updateDebugInfo('Error', errorMsg);
-            return;
-        }
-    }
-    
-    try {
-        // Ensure the renderer is initialized before starting/pausing
-        if (!simulation.renderer) {
-            console.log('Renderer not initialized, initializing now');
-            updateDebugInfo('Renderer', 'Initializing...');
-            
-            const rendererInitialized = simulation.initializeRenderer();
-            
-            if (!simulation.renderer || !rendererInitialized) {
-                throw new Error('Failed to initialize renderer');
+    if (resetButton) {
+        console.log('app.js: Reset button found');
+        resetButton.addEventListener('click', () => {
+            console.log('app.js: Reset button CLICKED');
+            if (simulation && typeof simulation.reset === 'function') {
+                console.log('app.js: Calling simulation.reset()');
+                simulation.reset();
+            } else {
+                console.error('app.js: simulation object or simulation.reset method is invalid!', simulation);
             }
-            
-            updateDebugInfo('Renderer', 'Initialized successfully');
-        }
-        
-        // Check if the canvas exists and has context
-        const canvas = document.getElementById('space-canvas');
-        if (!canvas) {
-            throw new Error("Canvas element 'space-canvas' not found");
-        }
-        
-        if (!canvas.getContext('2d')) {
-            throw new Error('Failed to get 2D context from canvas');
-        }
-        
-        // Update the canvas size if needed
-        if (simulation.renderer) {
-            simulation.renderer.resize();
-        }
-        
-        // Let the simulation object handle the start/pause logic
-        simulation.start(); 
-        
-        // Update global tracking variable (if still needed elsewhere)
-        isSimulationRunning = simulation.isRunning;
-        
-        // Log simulation state after calling simulation.start()
-        console.log('Simulation state AFTER calling simulation.start():', {
-            isRunning: simulation.isRunning,
-            isPaused: simulation.isPaused,
-            lastFrameTime: simulation.lastFrameTime,
-            frameCount: simulation.frameCount
         });
-        
-        // Ensure the start button text reflects the actual state from simulation
-        document.getElementById('start-btn').textContent = 
-            simulation.isRunning ? (simulation.isPaused ? 'Resume Simulation' : 'Pause Simulation') : 'Start Simulation';
-            
-        updateDebugInfo('Simulation', simulation.isRunning ? (simulation.isPaused ? 'Paused' : 'Running') : 'Stopped');
-        
-    } catch (error) {
-        console.error('Failed to start/pause simulation:', error);
-        updateDebugInfo('Error', `Start/Pause failed: ${error.message}`);
-        
-        // Show the error to the user
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#500; color:white; padding:20px; border-radius:10px; z-index:9999; max-width:80%; text-align:center;';
-        errorDiv.innerHTML = `
-            <h3>Error Starting/Pausing Simulation</h3>
-            <p>${error.message}</p>
-            <button onclick="this.parentNode.style.display='none'">Dismiss</button>
-        `;
-        document.body.appendChild(errorDiv);
+    } else {
+        console.error('app.js: Reset button (#reset-btn) NOT found!');
     }
-}
 
-/**
- * Reset the simulation to initial state
- */
-function resetSimulation() {
-    console.log('Resetting simulation...');
-    updateDebugInfo('Action', 'Reset button clicked');
-    
-    if (!simulation) {
-        console.error('Simulation not initialized');
-        updateDebugInfo('Error', 'Simulation not initialized');
-        return;
-    }
-    
-    try {
-        // Reset simulation state
-        simulation.reset();
-        updateDebugInfo('Simulation', 'Reset complete');
-        console.log('Simulation reset complete');
-    } catch (error) {
-        console.error('Error resetting simulation:', error);
-        updateDebugInfo('Error', `Reset failed: ${error.message}`);
-    }
-}
-
-/**
- * Show help dialog
- */
-function showHelp() {
-    updateDebugInfo('Action', 'Help button clicked');
-    
-    try {
-        const modal = document.getElementById('modal');
-        const modalContent = document.getElementById('modal-content');
-        const tutorialContent = document.getElementById('tutorial-content');
-        
-        if (!modal || !modalContent || !tutorialContent) {
-            throw new Error('Modal or tutorial elements not found');
-        }
-        
-        modalContent.innerHTML = tutorialContent.innerHTML;
-        modal.style.display = 'block';
-        
-        // Close button functionality
-        const closeBtn = modal.querySelector('.close');
-        closeBtn.onclick = function() {
-            modal.style.display = 'none';
-        };
-        
-        // Close modal when clicking outside content
-        window.onclick = function(event) {
-            if (event.target === modal) {
-                modal.style.display = 'none';
-            }
-        };
-        
-        updateDebugInfo('UI', 'Help displayed');
-    } catch (error) {
-        console.error('Error showing help:', error);
-        updateDebugInfo('Error', `Help display failed: ${error.message}`);
-    }
-}
-
-/**
- * Handle keyboard key down events
- * 
- * @param {KeyboardEvent} event - The keyboard event
- */
-function handleKeyDown(event) {
-    if (!simulation) {
-        updateDebugInfo('Error', 'Simulation not initialized (key down)');
-        return;
-    }
-    
-    try {
-        const key = event.key.toLowerCase();
-        updateDebugInfo('Input', `Key down: ${key}`);
-        
-        // Special keys that work even when simulation isn't running
-        if (key === ' ') {
-            // Space bar toggles pause/resume
-            event.preventDefault();
-            startSimulation(); // This will toggle pause/resume
-            return;
-        } else if (key === 'r') {
-            // 'R' key resets the simulation
-            resetSimulation();
-            return;
-        } else if (key === 'h' || key === '?') {
-            // 'H' key shows help
-            showHelp();
-            return;
-        } else if (key === 'p') {
-            // 'P' key shows physics equations
-            showPhysicsEquations();
-            return;
-        }
-        
-        // Movement keys for controlling the spacecraft
-        // Only process movement keys if simulation is running and not paused
-        if (simulation.isRunning && !simulation.isPaused) {
-            simulation.handleInput(key, true);
-        } else {
-            updateDebugInfo('Input', 'Ignored (simulation paused)');
-        }
-    } catch (error) {
-        console.error('Error handling keydown:', error);
-        updateDebugInfo('Error', `Keyboard input error: ${error.message}`);
-    }
-}
-
-/**
- * Handle keyboard key up events
- * 
- * @param {KeyboardEvent} event - The keyboard event
- */
-function handleKeyUp(event) {
-    if (!simulation) {
-        updateDebugInfo('Error', 'Simulation not initialized (key up)');
-        return;
-    }
-    
-    try {
-        const key = event.key.toLowerCase();
-        updateDebugInfo('Input', `Key up: ${key}`);
-        
-        // Only process movement keys if simulation is running and not paused
-        if (simulation.isRunning && !simulation.isPaused) {
-            simulation.handleInput(key, false);
-        }
-    } catch (error) {
-        console.error('Error handling keyup:', error);
-        updateDebugInfo('Error', `Keyboard input error: ${error.message}`);
-    }
-}
-
-// Initialize when the document is fully loaded
-document.addEventListener('DOMContentLoaded', initApp);
-
-// Export relevant modules for testing
-if (typeof module !== 'undefined') {
-    module.exports = {
-        initApp,
-        startSimulation,
-        resetSimulation
-    };
-}
+    // ... other event listeners or setup code ...
+    console.log('app.js: Event listeners setup complete (or attempted)');
+});
