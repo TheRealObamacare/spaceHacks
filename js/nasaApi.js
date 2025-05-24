@@ -1,223 +1,351 @@
-/**
- * NASA API Service
- * 
- * Handles requests to NASA APIs including:
- * - JPL Horizons for ephemeris data (positions and velocities of celestial bodies)
- * - NASA Image and Video Library for imagery
- */
+const API_KEY = 'r3UBVVstsuMcytaZ3jOYycWFtwKcLHwrVA2KXcgF';
+const SEARCH_URL = 'https://images-api.nasa.gov/search';
 
-class NasaApiService {
-    constructor() {
-        // Nothing needed in constructor
+async function searchPlanetImages(planetName) {
+  // Planet-specific search strategies to find the best full planet images
+  const planetSpecificQueries = {
+    'Mercury': [
+      'Mercury global map',
+      'Mercury hemisphere',
+      'Mercury MESSENGER global',
+      'Mercury full globe',
+      'Mercury entire planet',
+      'Mercury planet view'
+    ],
+    'Mars': [
+      'Mars global map',
+      'Mars hemisphere',
+      'Mars full planet',
+      'Mars globe view',
+      'Mars entire planet',
+      'Mars Viking global',
+      'Mars complete planet'
+    ],
+    'Saturn': [
+      'Saturn Voyager full disk',
+      'Saturn Cassini full planet',
+      'Saturn global view',
+      'Saturn complete planet',
+      'Saturn entire planet',
+      'Saturn full sphere'
+    ],
+    'Venus': [
+      'Venus global map',
+      'Venus hemisphere',
+      'Venus full planet',
+      'Venus Magellan global',
+      'Venus complete planet'
+    ],
+    'Earth': [
+      'Earth full disk',
+      'Earth global view',
+      'Earth Blue Marble',
+      'Earth hemisphere',
+      'Earth complete planet'
+    ],
+    'Jupiter': [
+      'Jupiter full disk',
+      'Jupiter global view',
+      'Jupiter hemisphere',
+      'Jupiter complete planet',
+      'Jupiter Voyager full'
+    ],
+    'Uranus': [
+      'Uranus full disk',
+      'Uranus global view',
+      'Uranus complete planet',
+      'Uranus hemisphere'
+    ],
+    'Neptune': [
+      'Neptune full disk',
+      'Neptune global view',
+      'Neptune complete planet',
+      'Neptune Voyager full'
+    ]
+  };
+
+  // Use planet-specific queries or fallback to generic ones
+  const searchQueries = planetSpecificQueries[planetName] || [
+    `${planetName} planet full disk`,
+    `${planetName} global view`,
+    `${planetName} full view`,
+    `${planetName} complete planet`,
+    `${planetName} entire planet`,
+    planetName // fallback to basic search
+  ];
+  
+  let allResults = [];
+  
+  // Try each search query and collect results
+  for (const searchQuery of searchQueries) {
+    try {
+      console.log(`   Trying search: "${searchQuery}"`);
+      const results = await searchSingleQuery(searchQuery);
+      
+      if (results.length > 0) {
+        allResults = allResults.concat(results);
+        // If we found good results with full planet keywords, prioritize them
+        const goodResults = results.filter(item => {
+          const title = item.data[0].title.toLowerCase();
+          const description = item.data[0].description || '';
+          
+          const fullPlanetKeywords = [
+            'full disk', 'global', 'hemisphere', 'planet', 
+            'complete', 'entire', 'whole', 'full view'
+          ];
+          
+          return fullPlanetKeywords.some(keyword => 
+            title.includes(keyword) || description.toLowerCase().includes(keyword)
+          );
+        });
+        
+        if (goodResults.length > 0) {
+          console.log(`   Found ${goodResults.length} good results with "${searchQuery}"`);
+          break; // Stop searching if we found good full planet images
+        }
+      }
+    } catch (error) {
+      console.log(`   Search "${searchQuery}" failed:`, error.message);
+      continue;
+    }
+  }
+
+  if (allResults.length === 0) {
+    console.log('No images found for:', planetName);
+    return [];
+  }
+  // Filter for images that are likely to show the full planet
+  const filteredItems = allResults.filter(item => {
+    const title = item.data[0].title.toLowerCase();
+    const description = (item.data[0].description || '').toLowerCase();
+    
+    // Look for keywords that indicate full planet images
+    const fullPlanetKeywords = [
+      'full disk', 'global', 'hemisphere', 'planet', 
+      'complete', 'entire', 'whole', 'full view',
+      'blue marble', 'globe', 'sphere'
+    ];
+    
+    // Avoid images that are likely partial views or surface details
+    const partialKeywords = [
+      'surface', 'close-up', 'detail', 'crater', 'region',
+      'polar', 'equatorial', 'storm', 'spot', 'calibration',
+      'target', 'sample', 'rock', 'soil', 'landing',
+      'rover', 'probe', 'instrument', 'camera test',
+      'close up', 'zoom', 'magnified', 'microscopic'
+    ];
+
+    // Special filtering for problematic planets
+    if (planetName === 'Mars') {
+      // Avoid rover/surface mission images
+      const marsAvoidKeywords = [
+        'rover', 'perseverance', 'curiosity', 'opportunity', 
+        'spirit', 'mastcam', 'calibration', 'target', 'sol',
+        'landing', 'surface', 'rock', 'soil', 'crater'
+      ];
+      
+      const hasMarsAvoidKeyword = marsAvoidKeywords.some(keyword => 
+        title.includes(keyword) || description.includes(keyword)
+      );
+      
+      if (hasMarsAvoidKeyword) return false;
     }
 
-    /**
-     * Fetch ephemeris data from JPL Horizons for a specific celestial body
-     * 
-     * @param {string} targetBody - Target body ID (e.g., "399" for Earth, "301" for Moon)
-     * @param {string} startTime - Start time in YYYY-MM-DD format
-     * @param {string} stopTime - End time in YYYY-MM-DD format
-     * @returns {Promise<Object>} Ephemeris data
-     */
-    async fetchEphemerisData(targetBody, startTime, stopTime) {
-        try {
-            console.log(`Fetching ephemeris data for body ${targetBody}...`);
-            
-            // Build query parameters
-            const params = new URLSearchParams({
-                format: 'json',
-                COMMAND: `'${targetBody}'`,
-                EPHEM_TYPE: 'VECTORS',
-                CENTER: '500@0', // Solar System Barycenter as coordinate center
-                START_TIME: startTime,
-                STOP_TIME: stopTime,
-                STEP_SIZE: '1d', // 1-day step size
-                QUANTITIES: '1', // Position and velocity vectors
-            });
-            
-            // URL for the request
-            const url = `${API_CONFIG.JPL_HORIZONS_API}?${params.toString()}`;
-            
-            // Perform fetch request
-            const response = await fetch(url);
-            
-            // Check if request was successful
-            if (!response.ok) {
-                throw new Error(`Failed to fetch ephemeris data: ${response.status} ${response.statusText}`);
-            }
-            
-            // Parse JSON response
-            const data = await response.json();
-            console.log("Ephemeris data fetched successfully");
-            return data;
-        } catch (error) {
-            console.error("Error fetching ephemeris data:", error);
-            // Return mock data as fallback
-            return this.getMockEphemerisData(targetBody);
-        }
+    if (planetName === 'Mercury') {
+      // Prioritize MESSENGER global views, avoid surface details
+      const mercuryAvoidKeywords = [
+        'caloris', 'crater', 'surface', 'terrain', 'geology',
+        'close-up', 'detail', 'basin'
+      ];
+      
+      const hasMercuryAvoidKeyword = mercuryAvoidKeywords.some(keyword => 
+        title.includes(keyword) || description.includes(keyword)
+      );
+      
+      if (hasMercuryAvoidKeyword) return false;
+    }
+
+    if (planetName === 'Saturn') {
+      // Prefer full disk views, avoid ring details
+      const saturnPreferKeywords = [
+        'full disk', 'global', 'planet', 'voyager', 'cassini'
+      ];
+      
+      const hasSaturnPreferKeyword = saturnPreferKeywords.some(keyword => 
+        title.includes(keyword) || description.includes(keyword)
+      );
+      
+      // Give preference to images with preferred keywords
+      if (hasSaturnPreferKeyword) return true;
     }
     
-    /**
-     * Search for images of a celestial body from NASA Image and Video Library
-     * 
-     * @param {string} celestialBody - Name of the celestial body (e.g., "earth", "moon")
-     * @param {number} count - Number of images to return
-     * @returns {Promise<Array>} Array of image URLs
-     */
-    async fetchCelestialBodyImages(celestialBody, count = 1) {
-        try {
-            console.log(`Fetching images for ${celestialBody}...`);
-            
-            // Build query parameters
-            const params = new URLSearchParams({
-                q: celestialBody,
-                media_type: 'image',
-                year_start: '2000',
-                year_end: new Date().getFullYear().toString(),
-            });
-            
-            // URL for the request
-            const url = `${API_CONFIG.NASA_IMAGES_API}/search?${params.toString()}`;
-            
-            // Perform fetch request
-            const response = await fetch(url);
-            
-            // Check if request was successful
-            if (!response.ok) {
-                throw new Error(`Failed to fetch images: ${response.status} ${response.statusText}`);
-            }
-            
-            // Parse JSON response
-            const data = await response.json();
-            
-            // Extract image URLs
-            const images = data.collection.items
-                .slice(0, count)
-                .map(item => {
-                    // Get the URL of the image
-                    const imageUrl = item.links && item.links[0] && item.links[0].href;
-                    return {
-                        url: imageUrl,
-                        title: item.data[0].title,
-                        description: item.data[0].description
-                    };
-                })
-                .filter(img => img.url); // Filter out any items without a URL
-            
-            console.log(`Found ${images.length} images for ${celestialBody}`);
-            return images;
-        } catch (error) {
-            console.error(`Error fetching images for ${celestialBody}:`, error);
-            // Return mock data as fallback
-            return this.getMockImages(celestialBody, count);
-        }
-    }
+    const hasFullPlanetKeyword = fullPlanetKeywords.some(keyword => 
+      title.includes(keyword) || description.includes(keyword)
+    );
     
-    /**
-     * Get the NASA Astronomy Picture of the Day (APOD)
-     * 
-     * @returns {Promise<Object>} APOD data including URL and explanation
-     */
-    async fetchAstronomyPictureOfDay() {
-        try {
-            console.log("Fetching Astronomy Picture of the Day...");
-            
-            // URL for the request
-            const url = `https://api.nasa.gov/planetary/apod?api_key=${API_CONFIG.getNasaApiKey()}`;
-            
-            // Perform fetch request
-            const response = await fetch(url);
-            
-            // Check if request was successful
-            if (!response.ok) {
-                throw new Error(`Failed to fetch APOD: ${response.status} ${response.statusText}`);
-            }
-            
-            // Parse JSON response
-            const data = await response.json();
-            console.log("APOD fetched successfully");
-            return data;
-        } catch (error) {
-            console.error("Error fetching APOD:", error);
-            // Return mock data as fallback
-            return {
-                title: "Space Exploration",
-                url: "https://via.placeholder.com/800x600?text=NASA+APOD+Placeholder",
-                explanation: "This is a placeholder for NASA's Astronomy Picture of the Day."
-            };
-        }
-    }
+    const hasPartialKeyword = partialKeywords.some(keyword => 
+      title.includes(keyword) || description.includes(keyword)
+    );
     
-    /**
-     * Provides mock ephemeris data as a fallback when API calls fail
-     * 
-     * @param {string} targetBody - Target body ID
-     * @returns {Object} Mock ephemeris data
-     */
-    getMockEphemerisData(targetBody) {
-        console.log(`Using mock ephemeris data for body ${targetBody}`);
-        
-        // Mock data structure for different celestial bodies
-        const mockData = {
-            '399': { // Earth
-                name: 'Earth',
-                position: { x: 0, y: 0, z: 0 },
-                velocity: { x: 0, y: 0, z: 0 },
-                mass: 5.972e24,
-                radius: 6371000
-            },
-            '301': { // Moon
-                name: 'Moon',
-                position: { x: 384400000, y: 0, z: 0 },
-                velocity: { x: 0, y: 1022, z: 0 },
-                mass: 7.342e22,
-                radius: 1737000
-            },
-            // Add more celestial bodies as needed
-        };
-        
-        // Return the mock data for the requested body, or Earth data as fallback
-        return mockData[targetBody] || mockData['399'];
-    }
-    
-    /**
-     * Provides mock images as a fallback when API calls fail
-     * 
-     * @param {string} celestialBody - Name of the celestial body
-     * @param {number} count - Number of images to return
-     * @returns {Array} Array of mock image objects
-     */
-    getMockImages(celestialBody, count) {
-        console.log(`Using mock images for ${celestialBody}`);
-        
-        const mockImages = {
-            'earth': [
-                {
-                    url: 'https://via.placeholder.com/300x300?text=Earth',
-                    title: 'Earth from Space',
-                    description: 'A view of Earth from outer space.'
-                }
-            ],
-            'moon': [
-                {
-                    url: 'https://via.placeholder.com/300x300?text=Moon',
-                    title: 'Moon Surface',
-                    description: 'The lunar surface as seen from orbit.'
-                }
-            ],
-            // Add more celestial bodies as needed
-        };
-        
-        // Return the mock images for the requested body, or a generic placeholder
-        return (mockImages[celestialBody.toLowerCase()] || [{
-            url: `https://via.placeholder.com/300x300?text=${celestialBody}`,
-            title: `${celestialBody} Placeholder`,
-            description: `Placeholder image for ${celestialBody}.`
-        }]).slice(0, count);
-    }
+    // Prefer images with full planet keywords and without partial keywords
+    return hasFullPlanetKeyword && !hasPartialKeyword;
+  });
+
+  const itemsToUse = filteredItems.length > 0 ? filteredItems : allResults;
+
+  // Remove duplicates based on NASA ID
+  const uniqueItems = itemsToUse.filter((item, index, self) => 
+    index === self.findIndex(t => t.data[0].nasa_id === item.data[0].nasa_id)
+  );
+
+  // Pull out the first 5 thumbnails
+  const thumbnails = uniqueItems.slice(0, 5).map(item => ({
+    title: item.data[0].title,
+    thumbnail: item.links[0].href,
+    nasa_id: item.data[0].nasa_id,
+    description: item.data[0].description ? item.data[0].description.substring(0, 100) + '...' : 'No description'
+  }));
+
+  console.log(`Found ${thumbnails.length} images for ${planetName}:`, thumbnails);
+  return thumbnails;
 }
 
-// Export the NasaApiService class
-if (typeof module !== 'undefined') {
-    module.exports = { NasaApiService };
-} 
+// Helper function to search with a single query
+async function searchSingleQuery(searchQuery) {
+  const url = new URL(SEARCH_URL);
+  url.searchParams.set('q', searchQuery);
+  url.searchParams.set('media_type', 'image');
+  // Note: this endpoint doesn't actually require an API key, but you can append your key
+  url.searchParams.set('api_key', API_KEY);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+
+  // The JSON structure:
+  // json.collection.items is an array of results
+  // each item.data[0] has metadata; item.links gives the thumbnail link
+  const items = json.collection.items;
+
+  if (!items || items.length === 0) {
+    return [];
+  }
+
+  return items;
+}
+
+// Function to get images for all planets
+async function getAllPlanetImages() {
+  const planets = [
+    'Mercury', 'Venus', 'Earth', 'Mars', 
+    'Jupiter', 'Saturn', 'Uranus', 'Neptune'
+  ];
+  
+  const allImages = {};
+  
+  for (const planet of planets) {
+    try {
+      console.log(`🌍 Searching for ${planet} images...`);
+      const images = await searchPlanetImages(planet);
+      allImages[planet] = images;
+      
+      // Add a small delay to be respectful to the API
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error(`❌ Failed to get images for ${planet}:`, error.message);
+      allImages[planet] = [];
+    }
+  }
+  
+  return allImages;
+}
+
+// Function to display all planet images in the DOM
+async function displayAllPlanets() {
+  try {
+    const allImages = await getAllPlanetImages();
+    
+    // Create main container
+    const mainContainer = document.createElement('div');
+    mainContainer.style.cssText = `
+      padding: 20px;
+      background: #0a0a0a;
+      color: white;
+      font-family: Arial, sans-serif;
+    `;
+    
+    const title = document.createElement('h1');
+    title.textContent = '🌌 NASA Planet Image Gallery';
+    title.style.textAlign = 'center';
+    mainContainer.appendChild(title);
+    
+    // Create gallery for each planet
+    for (const [planet, images] of Object.entries(allImages)) {
+      const planetSection = document.createElement('div');
+      planetSection.style.cssText = `
+        margin: 30px 0;
+        padding: 20px;
+        border: 2px solid #333;
+        border-radius: 10px;
+        background: #1a1a1a;
+      `;
+      
+      const planetTitle = document.createElement('h2');
+      planetTitle.textContent = `${planet} (${images.length} images)`;
+      planetTitle.style.color = '#4dabf7';
+      planetSection.appendChild(planetTitle);
+      
+      if (images.length === 0) {
+        const noImages = document.createElement('p');
+        noImages.textContent = 'No images found for this planet.';
+        noImages.style.color = '#888';
+        planetSection.appendChild(noImages);
+      } else {
+        const gallery = document.createElement('div');
+        gallery.style.cssText = `
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 20px;
+          margin-top: 15px;
+        `;
+        
+        images.forEach(img => {
+          const card = document.createElement('div');
+          card.style.cssText = `
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            background: #2a2a2a;
+            transition: transform 0.2s;
+          `;
+          card.onmouseenter = () => card.style.transform = 'scale(1.02)';
+          card.onmouseleave = () => card.style.transform = 'scale(1)';
+          
+          card.innerHTML = `
+            <h3 style="margin: 0 0 10px 0; color: #4dabf7; font-size: 16px;">${img.title}</h3>
+            <img src="${img.thumbnail}" alt="${img.title}" 
+                 style="width: 100%; height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 10px;" />
+            <p style="margin: 5px 0; font-size: 12px; color: #ccc;">${img.description}</p>
+            <p style="margin: 5px 0; font-size: 11px; color: #888;">NASA ID: ${img.nasa_id}</p>
+          `;
+          gallery.appendChild(card);
+        });
+        
+        planetSection.appendChild(gallery);
+      }
+      
+      mainContainer.appendChild(planetSection);
+    }
+    
+    // Clear body and add our gallery
+    document.body.innerHTML = '';
+    document.body.appendChild(mainContainer);
+    
+    console.log('🎉 Planet gallery created successfully!');
+  } catch (error) {
+    console.error('Failed to create planet gallery:', error);
+  }
+}
+
+// Example usage - you can call this in the browser console:
+// displayAllPlanets();

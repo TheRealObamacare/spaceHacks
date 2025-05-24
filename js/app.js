@@ -1,115 +1,190 @@
-/**
- * Main Application Module (app.js)
- * Initializes simulation, sets up UI event listeners, handles UI interactions.
- */
-const localConfig = (typeof config !== 'undefined') ? config : (window && window.config) ? window.config : {};
-let simulation = null; let isSimulationRunning = false; let debugInfo = {};
-(function() { /* ... polyfill ... */ }());
+// Keyboard input handling for Space Flight Simulator
 
-function initApp() {
-    console.log('app.js: Initializing...'); updateDebugInfo('Status', 'Initializing...');
-    if(typeof Simulation==='undefined'){const e='ERROR: Simulation class missing.';console.error(e);updateDebugInfo('Error',e);alert(e);return;}
-    try {
-        updateDebugInfo('Simulation', 'Creating...'); console.log("app.js: Creating Simulation..."); simulation=new Simulation(); if(!simulation)throw "Failed Sim create"; updateDebugInfo('Simulation', 'Instance OK'); console.log('app.js: Sim instance created.');
-        updateDebugInfo('Events', 'Setting up...'); console.log("app.js: Setup listeners..."); setupEventListeners(); updateDebugInfo('Events', 'Listeners OK');
-        if(simulation&&!simulation.renderer){console.log("app.js: Explicit renderer init..."); simulation.initializeRenderer();}
-        if(simulation?.nasaApiService){updateDebugInfo('NASA API','Load APOD...'); console.log("app.js: Load APOD..."); loadAstronomyPictureOfDay();} else {updateDebugInfo('NASA API','N/A');}
-        updateDebugInfo('UI','Show Physics...'); console.log("app.js: Show physics modal..."); showPhysicsEquations();
-        startFrameMonitor();
-        updateDebugInfo('Status','Init Complete'); console.log('app.js: App init OK.');
-    } catch (error) { const m=`App Init Fail: ${error.message}`; console.error(m, error); updateDebugInfo('Error', m); updateDebugInfo('Status','FAILED'); displayInitializationError(error); }
-}
-function displayInitializationError(error) { try{const d=document.createElement('div');d.style.cssText='position:fixed;top:10%;left:10%;right:10%;background:#800;color:white;padding:20px;border-radius:8px;z-index:10000;border:1px solid red;text-align:center;';d.innerHTML=`<h3>INIT FAILED</h3><p>${error.message}</p><p>Check console (F12).</p><button onclick="this.parentNode.remove()">X</button>`;document.body.appendChild(d);}catch(e){alert(`INIT ERROR: ${error.message}\nCheck console.`);} }
-function startFrameMonitor() { let lastC=0,lastT=performance.now(),rate=0; setInterval(()=>{if(!simulation?.renderer||!simulation.isRunning||simulation.isPaused){updateDebugInfo('Frame Rate','N/A');return;} const curC=simulation.frameCount||0; const curT=performance.now(); const elap=(curT-lastT)/1000; if(elap>=0.5){rate=Math.round((curC-lastC)/elap); updateDebugInfo('Frame Rate',`${rate} FPS`); lastC=curC; lastT=curT;} updateDebugInfo('Frames',curC);}, 500); console.log("app.js: Frame monitor started."); }
-function updateDebugInfo(key, value) { debugInfo[key]=String(value); const el=document.getElementById('debug-info'); if(el){let h=''; for(const [k,v] of Object.entries(debugInfo).sort()){let vh=v; if(v==='true'||v==='Running'||v.includes('success'))vh=`<strong style="color:#0F0;">${v}</strong>`; else if(v==='false'||v==='Stopped'||v.includes('FAIL'))vh=`<strong style="color:#F00;">${v}</strong>`; else if(v==='Paused'||v.includes('Warn'))vh=`<strong style="color:#FF0;">${v}</strong>`; h+=`<div style="margin-bottom:2px;"><strong style="color:#0CF;">${k}:</strong> ${vh}</div>`; } el.innerHTML=h;} }
-function showPhysicsEquations() {
-    console.log("app.js: Showing physics modal...");
-    const modal=document.getElementById('modal'); const mc=document.getElementById('modal-content');
-    if(!modal||!mc){console.error('app.js: Modal missing.');updateDebugInfo('Error','Modal missing');return;}
-    mc.innerHTML=`<span class="close" onclick="document.getElementById('modal').style.display='none'">×</span><h2>Physics</h2><div class="equation-section">...</div><button id="start-simulation-btn-modal" class="primary-btn">Start Simulation</button>`; // Add equations as needed
-    modal.style.display='block';
-    const btnM=document.getElementById('start-simulation-btn-modal');
-    if(btnM){console.log("app.js: Attach listener modal start"); btnM.replaceWith(btnM.cloneNode(true)); document.getElementById('start-simulation-btn-modal').addEventListener('click',()=>{console.log("app.js: MODAL Start Click!"); modal.style.display='none'; if(simulation&&!simulation.renderer)simulation.initializeRenderer(); startSimulation();});} else {console.error('Modal start btn missing!');updateDebugInfo('Error','Modal start missing');}
-    modal.onclick=(e)=>{if(e.target===modal)modal.style.display="none";}; updateDebugInfo('Modal','Physics displayed');
-}
-async function loadAstronomyPictureOfDay() { console.log("app.js: Load APOD..."); if(!simulation?.nasaApiService){console.log(" -> skipped (no API)");updateDebugInfo('APOD','Skipped');return;} try{const apod=await simulation.nasaApiService.fetchAPOD(); if(apod?.url){console.log(" -> APOD OK:",apod.title);updateDebugInfo('APOD',`Loaded ${apod.date}`); const hero=document.querySelector('.simulation-container'); if(hero&&apod.media_type==='image'){let overlay=hero.querySelector('.background-overlay');if(!overlay){overlay=document.createElement('div');overlay.className='background-overlay';hero.insertBefore(overlay,hero.firstChild);} const imgUrl=apod.thumbnail_url||apod.url; overlay.style.backgroundImage=`url(${imgUrl})`;overlay.style.opacity='0.1';}} else {console.warn(" -> Failed APOD load.");updateDebugInfo('APOD','Failed');}}catch(e){console.error("app.js: APOD Error:",e);updateDebugInfo('APOD Error',e.message);} }
-function setupEventListeners() {
-    console.log("app.js: setupEventListeners..."); let c=0; try{ const addL=(id,h)=>{const b=document.getElementById(id);if(b){console.log(` Attach listener #${id}`);b.addEventListener('click',h);c++;}else console.warn(`Btn #${id} missing.`);}; addL('start-btn',handleStartButtonClick); addL('reset-btn',handleResetButtonClick); addL('help-btn',showHelp); addL('physics-btn',showPhysicsEquations); console.log(" Attach keydown"); window.addEventListener('keydown',handleKeyDown); c++; console.log(" Attach keyup"); window.addEventListener('keyup',handleKeyUp); c++; console.log(`app.js: Listeners setup OK (${c}).`); } catch(e){console.error('Listener setup error:',e);updateDebugInfo('Event Error',`Setup Fail: ${e.message}`);}
-}
-function handleStartButtonClick() { console.log("app.js: Header Start Btn Click!"); updateDebugInfo('Action','Header Start'); startSimulation(); }
-function handleResetButtonClick() { console.log("app.js: Reset Btn Click!"); updateDebugInfo('Action','Reset'); resetSimulation(); }
-function startSimulation() {
-    console.log("app.js: startSimulation()."); updateDebugInfo('Action','Start/Pause'); if(!simulation){console.error('Sim null!');updateDebugInfo('Error','Sim null');return;}
-    try {
-        simulation.start(); // Delegate (now async for initial load)
-        // Check state immediately, though it might change if start() is async
-        isSimulationRunning=simulation.isRunning; console.log(`app.js: State after sim.start call: run=${simulation.isRunning}, pause=${simulation.isPaused}`); const btn=document.getElementById('start-btn'); if(btn)btn.textContent=simulation.isRunning?(simulation.isPaused?'Resume':'Pause'):'Start'; updateDebugInfo('Sim State',simulation.isRunning?(simulation.isPaused?'Paused':'Running'):'Stopped');
-    } catch(e){console.error('Start/Pause error:',e);updateDebugInfo('Error',`StartFail: ${e.message}`);alert(`Start Error: ${e.message}`);}
-}
-function resetSimulation() { console.log("app.js: resetSimulation()."); updateDebugInfo('Action','Reset'); if(!simulation){console.error('Sim null!');updateDebugInfo('Error','Sim null');return;} try{simulation.reset(); isSimulationRunning=simulation.isRunning; console.log(`app.js: State after sim.reset: run=${simulation.isRunning}, pause=${simulation.isPaused}`); const btn=document.getElementById('start-btn'); if(btn)btn.textContent='Start Sim'; updateDebugInfo('Sim State','Reset/Stopped'); } catch(e){console.error('Reset error:',e);updateDebugInfo('Error',`ResetFail: ${e.message}`);alert(`Reset Error: ${e.message}`);} }
-function showHelp() { console.log("app.js: showHelp()."); updateDebugInfo('Action','Help'); try{const m=document.getElementById('modal');const mc=document.getElementById('modal-content');const tc=document.getElementById('tutorial-content');if(!m||!mc||!tc)throw "Modal/tutorial missing"; mc.innerHTML=`<span class="close" onclick="document.getElementById('modal').style.display='none'">×</span>${tc.innerHTML}`; m.style.display='block';m.onclick=(e)=>{if(e.target===m)m.style.display="none";}; updateDebugInfo('UI','Help shown'); console.log("app.js: Help shown.");}catch(e){console.error('Help error:',e);updateDebugInfo('Error',`HelpFail: ${e.message}`);alert(`Help Error: ${e.message}`);} }
-function handleKeyDown(event) {
-     if(!event.repeat&&!event.metaKey&&!event.ctrlKey)console.log(`KeyDown: K='${event.key}'`);
-     const relevant=[' ','w','a','s','d','f','+','-','r','h','p','?']; if(relevant.includes(event.key.toLowerCase()))event.preventDefault();
-     const keyL=event.key.toLowerCase();
-     switch(keyL){ case ' ':console.log(" -> Space");startSimulation();return; case 'r':console.log(" -> R");resetSimulation();return; case 'h':case '?':console.log(" -> H/?");showHelp();return; case 'p':console.log(" -> P");showPhysicsEquations();return; }
-     if(!simulation){if(!event.repeat)console.log(" -> KD ignored (Sim null)");return;}
-     if(simulation.isRunning&&!simulation.isPaused){if(!event.repeat)console.log(` -> Delegate KD ${keyL}`); simulation.handleInput(keyL, true);}
-     else if(!event.repeat){console.log(` -> KD ignored (run=${simulation.isRunning}, pause=${simulation.isPaused})`);}
-}
-function handleKeyUp(event) {
-     if(!event.metaKey&&!event.ctrlKey)console.log(`KeyUp: K='${event.key}'`);
-     if(!simulation)return;
-     const keyL=event.key.toLowerCase(); const moveKeys=['w','a','s','d'];
-     if(moveKeys.includes(keyL)){if(simulation.isRunning&&!simulation.isPaused){console.log(` -> Delegate KU ${keyL}`); simulation.handleInput(keyL, false);}}
+// Track which keys are currently pressed
+const keys = {};
+
+// Game state variables
+let isPaused = false;
+let lastSpacePress = 0; // To prevent rapid pause/unpause toggle
+
+// Initialize keyboard event listeners
+function initKeyboardControls() {    // Key down event - when a key is pressed
+    document.addEventListener('keydown', (event) => {
+        keys[event.code] = true;
+        
+        // Handle pause/unpause with spacebar (single press toggle)
+        if (event.code === 'Space') {
+            const now = Date.now();
+            if (now - lastSpacePress > 200) { // 200ms debounce
+                togglePause();
+                lastSpacePress = now;
+            }
+            event.preventDefault();
+            return;
+        }
+        
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) {
+            event.preventDefault();
+        }
+        
+        console.log(`Key pressed: ${event.code} (${event.key})`);
+    });
+    
+    // Key up event - when a key is released
+    document.addEventListener('keyup', (event) => {
+        keys[event.code] = false;
+        console.log(`Key released: ${event.code} (${event.key})`);
+    });
+    
+    // Lose focus handling - reset all keys when window loses focus
+    window.addEventListener('blur', () => {
+        for (let key in keys) {
+            keys[key] = false;
+        }
+    });
 }
 
-document.addEventListener('DOMContentLoaded', () => { console.log("app.js: DOM Ready. Init App."); initApp(); });
+// Check if a specific key is currently pressed
+function isKeyPressed(keyCode) {
+    return keys[keyCode] || false;
+}
 
-// ... (likely at the beginning of your app.js or inside a DOMContentLoaded) ...
-console.log('app.js: Script loaded');
+// Handle rocket controls based on keyboard input
+function handleRocketControls() {
+    // Skip controls if game is paused
+    if (isPaused) {
+        return;
+    }
+    
+    // Thrust controls - removed Space, now only Arrow Up and W
+    if (isKeyPressed('ArrowUp') || isKeyPressed('KeyW')) {
+        // Increase thrust
+        if (rocketFuel > 0) {
+            rocketThrust = Math.min(rocketThrust + 100, 10000); // Max thrust limit
+            // Continuous fuel consumption while thrust key is held
+            rocketFuel = Math.max(0, rocketFuel - 0.05); // Consume fuel continuously
+        }
+    } else {
+        // Decrease thrust when not pressing thrust key
+        rocketThrust = Math.max(rocketThrust - 50, 0);
+    }
+    
+    // Rotation controls - NO fuel consumption for rotation (using reaction wheels/gyroscopes)
+    if (isKeyPressed('ArrowLeft') || isKeyPressed('KeyA')) {
+        angle -= 2; // Rotate left (no fuel cost)
+    }
+    if (isKeyPressed('ArrowRight') || isKeyPressed('KeyD')) {
+        angle += 2; // Rotate right (no fuel cost)
+    }
+    
+    // Keep angle within 0-360 degrees
+    if (angle < 0) angle += 360;
+    if (angle >= 360) angle -= 360;
+    
+    // Additional controls
+    if (isKeyPressed('KeyR')) {
+        // Reset rocket position and velocity
+        resetRocket();
+    }
+}
 
-// Assuming you have an initialization function or directly attach listeners
+// Example functions for rocket control (you'll need to implement these)
+function resetRocket() {
+    rocketThrust = 0;
+    rocketVelocityX = 0;
+    rocketVelocityY = 0;
+    positionX = 0;
+    positionY = 0;
+    angle = 0;
+    rocketFuel = 100;
+    console.log('Rocket reset');
+}
+
+function togglePause() {
+    isPaused = !isPaused;
+    console.log(isPaused ? 'Game Paused' : 'Game Resumed');
+    
+    // You can add visual feedback here, like showing a pause overlay
+    const hudElement = document.getElementById('hud');
+    if (hudElement) {
+        if (isPaused) {
+            hudElement.style.opacity = '0.5';
+            // Add pause indicator
+            let pauseIndicator = document.getElementById('pause-indicator');
+            if (!pauseIndicator) {
+                pauseIndicator = document.createElement('div');
+                pauseIndicator.id = 'pause-indicator';
+                pauseIndicator.style.cssText = `
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    font-size: 24px;
+                    font-weight: bold;
+                    z-index: 1000;
+                `;
+                pauseIndicator.textContent = 'PAUSED - Press SPACE to resume';
+                document.body.appendChild(pauseIndicator);
+            }
+        } else {
+            hudElement.style.opacity = '1';
+            // Remove pause indicator
+            const pauseIndicator = document.getElementById('pause-indicator');
+            if (pauseIndicator) {
+                pauseIndicator.remove();
+            }
+        }
+    }
+}
+
+// Initialize controls when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('app.js: DOMContentLoaded event fired');
-
-    const simulation = new Simulation(); // Or however you instantiate your simulation
-    console.log('app.js: Simulation object created:', simulation);
-
-    const startButton = document.getElementById('start-btn');
-    const resetButton = document.getElementById('reset-btn');
-    const helpButton = document.getElementById('help-btn');
-
-    if (startButton) {
-        console.log('app.js: Start button found');
-        startButton.addEventListener('click', () => {
-            console.log('app.js: Start button CLICKED');
-            if (simulation && typeof simulation.start === 'function') {
-                console.log('app.js: Calling simulation.start()');
-                simulation.start();
-            } else {
-                console.error('app.js: simulation object or simulation.start method is invalid!', simulation);
-            }
-        });
-    } else {
-        console.error('app.js: Start button (#start-btn) NOT found!');
-    }
-
-    if (resetButton) {
-        console.log('app.js: Reset button found');
-        resetButton.addEventListener('click', () => {
-            console.log('app.js: Reset button CLICKED');
-            if (simulation && typeof simulation.reset === 'function') {
-                console.log('app.js: Calling simulation.reset()');
-                simulation.reset();
-            } else {
-                console.error('app.js: simulation object or simulation.reset method is invalid!', simulation);
-            }
-        });
-    } else {
-        console.error('app.js: Reset button (#reset-btn) NOT found!');
-    }
-
-    // ... other event listeners or setup code ...
-    console.log('app.js: Event listeners setup complete (or attempted)');
+    initKeyboardControls();
+    console.log('Keyboard controls initialized');
+    
+    // Display controls to user
+    displayControls();
 });
+
+function displayControls() {
+    console.log(`
+    🚀 SPACE FLIGHT SIMULATOR CONTROLS:
+    
+    🔥 THRUST:
+    • ↑ / W - Fire engines
+    
+    🔄 ROTATION:
+    • ← / A - Rotate left
+    • → / D - Rotate right
+    
+    ⚙️ SYSTEM:
+    • SPACE - Pause/unpause
+    • R - Reset rocket
+    `);
+}
+
+// Game loop function to handle continuous input
+function gameLoop() {
+    handleRocketControls();
+    
+    // Update physics if not paused
+    if (!isPaused) {
+        // Update physics with a fixed time step (1/60 second)
+        const deltaTime = 1/60;
+        const physicsState = updateRocketPhysics(deltaTime);
+        
+        // You can use physicsState to update the display
+        // console.log('Position:', physicsState.position);
+        // console.log('Velocity:', physicsState.velocity);
+        // console.log('Forces:', physicsState.forces);
+    }
+    
+    requestAnimationFrame(gameLoop);
+}
+
+// Start the game loop
+// gameLoop();
