@@ -118,6 +118,139 @@ function calculatePosition(initialPosition, velocity, time, acceleration) {
     return initialPosition + velocity * time + 0.5 * acceleration * time ** 2;
 }
 
+// Vector utility functions for proper directional calculations
+function calculateVectorMagnitude(x, y) {
+    return Math.sqrt(x * x + y * y);
+}
+
+function calculateVectorDirection(x, y) {
+    return Math.atan2(y, x) * (180 / Math.PI); // Returns angle in degrees
+}
+
+function normalizeVector(x, y) {
+    const magnitude = calculateVectorMagnitude(x, y);
+    if (magnitude === 0) return { x: 0, y: 0 };
+    return { x: x / magnitude, y: y / magnitude };
+}
+
+// Additional vector operations for advanced physics calculations
+
+// Calculate dot product of two vectors
+function dotProduct(x1, y1, x2, y2) {
+    return x1 * x2 + y1 * y2;
+}
+
+// Calculate cross product magnitude of two 2D vectors (returns scalar)
+function crossProductMagnitude(x1, y1, x2, y2) {
+    return x1 * y2 - y1 * x2;
+}
+
+// Rotate a vector by an angle (in degrees)
+function rotateVector(x, y, angleDegrees) {
+    const angleRad = angleDegrees * Math.PI / 180;
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+    
+    return {
+        x: x * cos - y * sin,
+        y: x * sin + y * cos
+    };
+}
+
+// Project vector A onto vector B
+function projectVector(ax, ay, bx, by) {
+    const bMagSquared = bx * bx + by * by;
+    if (bMagSquared === 0) return { x: 0, y: 0 };
+    
+    const scalar = (ax * bx + ay * by) / bMagSquared;
+    return {
+        x: scalar * bx,
+        y: scalar * by
+    };
+}
+
+// Calculate centripetal acceleration required for circular motion
+function calculateCentripetalAcceleration(velocity, radius) {
+    if (radius === 0) return 0;
+    return (velocity * velocity) / radius;
+}
+
+// Calculate the angle between rocket's facing direction and velocity vector
+function calculateDriftAngle() {
+    const velocityAngle = calculateVectorDirection(rocketVelocityX, rocketVelocityY);
+    let drift = angle - velocityAngle;
+    
+    // Normalize to -180 to 180 degrees
+    while (drift > 180) drift -= 360;
+    while (drift < -180) drift += 360;
+    
+    return drift;
+}
+
+// Calculate efficiency of thrust relative to velocity direction
+function calculateThrustEfficiency() {
+    const velocityMag = calculateVectorMagnitude(rocketVelocityX, rocketVelocityY);
+    if (velocityMag === 0 || rocketThrust === 0) return 0;
+    
+    const thrustComponents = calculateThrustComponents();
+    const velocityNormalized = normalizeVector(rocketVelocityX, rocketVelocityY);
+    const thrustNormalized = normalizeVector(thrustComponents.fx, thrustComponents.fy);
+    
+    // Dot product gives cosine of angle between vectors
+    return dotProduct(velocityNormalized.x, velocityNormalized.y, thrustNormalized.x, thrustNormalized.y);
+}
+
+// Calculate specific orbital energy (energy per unit mass)
+function calculateSpecificOrbitalEnergy() {
+    const kineticEnergyPerMass = calculateKineticEnergy() / ROCKET_MASS;
+    const potentialEnergyPerMass = calculatePotentialEnergy() / ROCKET_MASS;
+    
+    return kineticEnergyPerMass + potentialEnergyPerMass;
+}
+
+// Calculate semi-major axis of current orbit (if in orbit)
+function calculateSemiMajorAxis(centralBodyMass) {
+    const specificEnergy = calculateSpecificOrbitalEnergy();
+    if (specificEnergy >= 0) return Infinity; // Not in a bound orbit
+    
+    return -(G * centralBodyMass) / (2 * specificEnergy);
+}
+
+// Calculate current g-force experienced by the rocket
+function calculateGForce() {
+    const forces = calculateAllForcesOnRocket();
+    const totalAcceleration = calculateVectorMagnitude(forces.totalFx / ROCKET_MASS, forces.totalFy / ROCKET_MASS);
+    
+    return totalAcceleration / EARTH_GRAVITY; // G-force relative to Earth gravity
+}
+
+// Calculate atmospheric effects (simplified model)
+function calculateAtmosphericDrag(bodyName, altitude) {
+    // This is a simplified model - you can expand it later
+    if (bodyName !== 'earth' || altitude > 100000) return { fx: 0, fy: 0 }; // No atmosphere above 100km
+    
+    const velocity = calculateVectorMagnitude(rocketVelocityX, rocketVelocityY);
+    if (velocity === 0) return { fx: 0, fy: 0 };
+    
+    // Simplified atmospheric density model
+    const seaLevelDensity = 1.225; // kg/m³
+    const scaleHeight = 8400; // meters
+    const density = seaLevelDensity * Math.exp(-altitude / scaleHeight);
+    
+    // Drag calculation: F = 0.5 * ρ * v² * Cd * A
+    const dragCoefficient = 0.5;
+    const crossSectionalArea = 10; // m²
+    const dragMagnitude = 0.5 * density * velocity * velocity * dragCoefficient * crossSectionalArea;
+    
+    // Drag opposes velocity direction
+    const velocityNormalized = normalizeVector(rocketVelocityX, rocketVelocityY);
+    
+    return {
+        fx: -dragMagnitude * velocityNormalized.x,
+        fy: -dragMagnitude * velocityNormalized.y
+    };
+}
+
 // Updated physics integration function
 function updateRocketPhysics(deltaTime) {
     // Calculate all forces acting on the rocket
@@ -220,17 +353,276 @@ function calculateForceOnRocket() {
     return forces.totalMagnitude;
 }
 
-// Helper function to get current rocket state
+// Helper function to get current rocket state with comprehensive vector information
 function getRocketState() {
     const forces = calculateAllForcesOnRocket();
-    const speed = Math.sqrt(rocketVelocityX * rocketVelocityX + rocketVelocityY * rocketVelocityY);
+    const speed = calculateVectorMagnitude(rocketVelocityX, rocketVelocityY);
+    const velocityDirection = calculateVectorDirection(rocketVelocityX, rocketVelocityY);
+    const accelerationMagnitude = calculateVectorMagnitude(forces.totalFx / ROCKET_MASS, forces.totalFy / ROCKET_MASS);
+    const accelerationDirection = calculateVectorDirection(forces.totalFx, forces.totalFy);
+    
+    // Calculate distance to nearest celestial body
+    let nearestBody = null;
+    let nearestDistance = Infinity;
+    for (const [bodyName, body] of Object.entries(celestialBodies)) {
+        const distance = calculateDistance(positionX, positionY, body.x, body.y);
+        if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestBody = bodyName;
+        }
+    }
     
     return {
-        position: { x: positionX, y: positionY },
-        velocity: { x: rocketVelocityX, y: rocketVelocityY, magnitude: speed },
+        position: { 
+            x: positionX, 
+            y: positionY,
+            magnitude: calculateVectorMagnitude(positionX, positionY),
+            direction: calculateVectorDirection(positionX, positionY)
+        },
+        velocity: { 
+            x: rocketVelocityX, 
+            y: rocketVelocityY, 
+            magnitude: speed,
+            direction: velocityDirection
+        },
+        acceleration: {
+            x: forces.totalFx / ROCKET_MASS,
+            y: forces.totalFy / ROCKET_MASS,
+            magnitude: accelerationMagnitude,
+            direction: accelerationDirection
+        },
         angle: angle,
         thrust: rocketThrust,
         fuel: rocketFuel,
-        forces: forces
+        forces: forces,
+        nearestBody: {
+            name: nearestBody,
+            distance: nearestDistance
+        }
+    };
+}
+
+// Comprehensive vector analysis for display and debugging
+function getVectorAnalysis() {
+    const rocketState = getRocketState();
+    const forces = rocketState.forces;
+    
+    // Calculate various vector relationships
+    const thrustEfficiency = calculateThrustEfficiency();
+    const driftAngle = calculateDriftAngle();
+    const gForce = calculateGForce();
+    
+    // Calculate velocity components relative to rocket orientation
+    const velocityInRocketFrame = rotateVector(
+        rocketVelocityX, 
+        rocketVelocityY, 
+        -angle // Negative to convert from world to rocket frame
+    );
+    
+    // Calculate force components relative to rocket orientation
+    const forceInRocketFrame = rotateVector(
+        forces.totalFx,
+        forces.totalFy,
+        -angle
+    );
+    
+    // Calculate orbital parameters for nearest body
+    const nearestBodyData = celestialBodies[rocketState.nearestBody.name];
+    const orbitalVelocity = calculateOrbitalVelocity(nearestBodyData.mass, rocketState.nearestBody.distance);
+    const escapeVelocity = calculateEscapeVelocity(nearestBodyData.mass, rocketState.nearestBody.distance);
+    
+    return {
+        // Basic vectors
+        position: rocketState.position,
+        velocity: rocketState.velocity,
+        acceleration: rocketState.acceleration,
+        
+        // Rocket-relative vectors
+        velocityInRocketFrame: {
+            forward: velocityInRocketFrame.x,  // Forward/backward relative to rocket
+            lateral: velocityInRocketFrame.y   // Left/right relative to rocket
+        },
+        
+        forceInRocketFrame: {
+            forward: forceInRocketFrame.x,
+            lateral: forceInRocketFrame.y
+        },
+        
+        // Vector relationships
+        thrustEfficiency: thrustEfficiency,
+        driftAngle: driftAngle,
+        gForce: gForce,
+        
+        // Orbital mechanics
+        orbitalVelocity: orbitalVelocity,
+        escapeVelocity: escapeVelocity,
+        velocityRatio: rocketState.velocity.magnitude / orbitalVelocity,
+        escapeRatio: rocketState.velocity.magnitude / escapeVelocity,
+        
+        // Energy analysis
+        kineticEnergy: calculateKineticEnergy(),
+        potentialEnergy: calculatePotentialEnergy(),
+        totalEnergy: calculateTotalEnergy(),
+        specificEnergy: calculateSpecificOrbitalEnergy(),
+        
+        // Force breakdown with directions
+        forceBreakdown: Object.fromEntries(
+            Object.entries(forces.breakdown).map(([name, force]) => [
+                name,
+                {
+                    ...force,
+                    magnitude: calculateVectorMagnitude(force.fx, force.fy),
+                    direction: calculateVectorDirection(force.fx, force.fy)
+                }
+            ])
+        )
+    };
+}
+
+// Function to update HUD with vector information
+function updateHUDWithVectorData() {
+    const analysis = getVectorAnalysis();
+    
+    // Update velocity display with direction
+    const velocityElement = document.getElementById('velocity-value');
+    if (velocityElement) {
+        const velocityKmPerS = (analysis.velocity.magnitude / 1000).toFixed(2);
+        const velocityDirection = analysis.velocity.direction.toFixed(1);
+        velocityElement.textContent = `${velocityKmPerS} km/s @ ${velocityDirection}°`;
+    }
+    
+    // Update acceleration display with direction
+    const accelerationElement = document.getElementById('acceleration-value');
+    if (accelerationElement) {
+        const accelMagnitude = analysis.acceleration.magnitude.toFixed(2);
+        const accelDirection = analysis.acceleration.direction.toFixed(1);
+        accelerationElement.textContent = `${accelMagnitude} m/s² @ ${accelDirection}°`;
+    }
+    
+    // Update fuel display
+    const fuelBar = document.getElementById('fuel-bar');
+    if (fuelBar) {
+        fuelBar.style.width = `${rocketFuel}%`;
+        fuelBar.style.backgroundColor = rocketFuel > 25 ? '#4CAF50' : 
+                                       rocketFuel > 10 ? '#FF9800' : '#F44336';
+    }
+    
+    // Update gravity display with G-force
+    const gravityElement = document.getElementById('gravity-value');
+    if (gravityElement) {
+        gravityElement.textContent = `${analysis.gForce.toFixed(2)} G`;
+    }
+    
+    return analysis;
+}
+
+// Calculate orbital velocity needed for circular orbit at current distance from a body
+function calculateOrbitalVelocity(bodyMass, distance) {
+    if (distance === 0) return 0;
+    return Math.sqrt((G * bodyMass) / distance);
+}
+
+// Calculate escape velocity from a celestial body at current distance
+function calculateEscapeVelocity(bodyMass, distance) {
+    if (distance === 0) return 0;
+    return Math.sqrt((2 * G * bodyMass) / distance);
+}
+
+// Calculate the rocket's kinetic energy
+function calculateKineticEnergy() {
+    const velocity = calculateVectorMagnitude(rocketVelocityX, rocketVelocityY);
+    return 0.5 * ROCKET_MASS * velocity * velocity;
+}
+
+// Calculate the rocket's potential energy relative to all celestial bodies
+function calculatePotentialEnergy() {
+    let totalPotentialEnergy = 0;
+    
+    for (const [bodyName, body] of Object.entries(celestialBodies)) {
+        const distance = calculateDistance(positionX, positionY, body.x, body.y);
+        if (distance > 0) {
+            // Gravitational potential energy (negative by convention)
+            const potentialEnergy = -(G * body.mass * ROCKET_MASS) / distance;
+            totalPotentialEnergy += potentialEnergy;
+        }
+    }
+    
+    return totalPotentialEnergy;
+}
+
+// Calculate total mechanical energy (kinetic + potential)
+function calculateTotalEnergy() {
+    return calculateKineticEnergy() + calculatePotentialEnergy();
+}
+
+// Predict future position based on current velocity and forces
+function predictFuturePosition(timeStep, steps = 10) {
+    const predictions = [];
+    let futureX = positionX;
+    let futureY = positionY;
+    let futureVx = rocketVelocityX;
+    let futureVy = rocketVelocityY;
+    
+    for (let i = 0; i < steps; i++) {
+        // Calculate forces at this predicted position
+        const predictedForces = calculateForcesAtPosition(futureX, futureY);
+        
+        // Calculate accelerations
+        const ax = predictedForces.totalFx / ROCKET_MASS;
+        const ay = predictedForces.totalFy / ROCKET_MASS;
+        
+        // Update velocities
+        futureVx += ax * timeStep;
+        futureVy += ay * timeStep;
+        
+        // Update positions
+        futureX += futureVx * timeStep + 0.5 * ax * timeStep * timeStep;
+        futureY += futureVy * timeStep + 0.5 * ay * timeStep * timeStep;
+        
+        predictions.push({
+            x: futureX,
+            y: futureY,
+            vx: futureVx,
+            vy: futureVy,
+            time: (i + 1) * timeStep
+        });
+    }
+    
+    return predictions;
+}
+
+// Calculate forces at a specific position (for trajectory prediction)
+function calculateForcesAtPosition(x, y) {
+    let totalFx = 0;
+    let totalFy = 0;
+    const forceBreakdown = {};
+    
+    // Calculate gravitational forces from all celestial bodies
+    for (const [bodyName, body] of Object.entries(celestialBodies)) {
+        const dx = body.x - x;
+        const dy = body.y - y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0) {
+            const forceMagnitude = calculateGravity(body.mass, ROCKET_MASS, distance);
+            const unitX = dx / distance;
+            const unitY = dy / distance;
+            
+            const fx = forceMagnitude * unitX;
+            const fy = forceMagnitude * unitY;
+            
+            totalFx += fx;
+            totalFy += fy;
+            forceBreakdown[bodyName] = { fx, fy };
+        }
+    }
+    
+    // Note: We don't include thrust in predictions as it's user-controlled
+    
+    return {
+        totalFx,
+        totalFy,
+        breakdown: forceBreakdown,
+        totalMagnitude: Math.sqrt(totalFx * totalFx + totalFy * totalFy)
     };
 }

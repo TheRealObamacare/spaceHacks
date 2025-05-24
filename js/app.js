@@ -177,10 +177,12 @@ function gameLoop() {
         const deltaTime = 1/60;
         const physicsState = updateRocketPhysics(deltaTime);
         
-        // You can use physicsState to update the display
-        // console.log('Position:', physicsState.position);
-        // console.log('Velocity:', physicsState.velocity);
-        // console.log('Forces:', physicsState.forces);
+        // Update HUD with comprehensive vector data
+        updateHUDWithVectorData();
+        
+        // Optional: Log detailed vector analysis for debugging
+        // const analysis = getVectorAnalysis();
+        // console.log('Vector Analysis:', analysis);
     }
     
     requestAnimationFrame(gameLoop);
