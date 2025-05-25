@@ -9,6 +9,7 @@ class Renderer {
     };    this.planetImages = {};
     this.imagesLoaded = false;
     this.loadPlanetImages();
+    this.zoomIn();
   }
 
   render(scene) {
