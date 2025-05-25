@@ -29,4 +29,10 @@ class Renderer {
       this.context.restore();
     });
   }  
+  zoomIn() {
+    this.camera.zoom = 500; // Example zoom level
+    this.camera.followRocket = true; // Enable camera follow
+    this.updateCamera();
+    console.log(`Zoomed in: ${this.camera.zoom}`);
+  }
 }
