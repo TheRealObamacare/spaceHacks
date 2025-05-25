@@ -507,11 +507,11 @@ async function downloadAllPlanetImages() {
     'Jupiter', 'Saturn', 'Uranus', 'Neptune'
   ];
   
-  console.log('🚀 Starting download of full planet images...\n');
+  console.log('Starting download of full planet images...\n');
   
   for (const planet of planets) {
     try {
-      console.log(`🌍 Searching for best ${planet} image...`);
+      console.log(`Searching for best ${planet} image...`);
       const bestImage = await searchPlanetImages(planet);
       
       if (!bestImage || !bestImage.collection) {
@@ -519,7 +519,7 @@ async function downloadAllPlanetImages() {
         continue;
       }
       
-      console.log(`📡 Found: ${bestImage.title}`);
+      console.log(`Found: ${bestImage.title}`);
       console.log(`🔍 Getting high-resolution URL...`);
       
       const highResUrl = await getHighResImageUrl(bestImage.collection);

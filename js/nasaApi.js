@@ -245,7 +245,7 @@ async function getAllPlanetImages() {
   
   for (const planet of planets) {
     try {
-      console.log(`🌍 Searching for ${planet} images...`);
+      console.log(`Searching for ${planet} images...`);
       const images = await searchPlanetImages(planet);
       allImages[planet] = images;
       
@@ -275,7 +275,7 @@ async function displayAllPlanets() {
     `;
     
     const title = document.createElement('h1');
-    title.textContent = '🌌 NASA Planet Image Gallery';
+    title.textContent = 'NASA Planet Image Gallery';
     title.style.textAlign = 'center';
     mainContainer.appendChild(title);
     
@@ -341,7 +341,7 @@ async function displayAllPlanets() {
     document.body.innerHTML = '';
     document.body.appendChild(mainContainer);
     
-    console.log('🎉 Planet gallery created successfully!');
+    console.log('Planet gallery created successfully!');
   } catch (error) {
     console.error('Failed to create planet gallery:', error);
   }
