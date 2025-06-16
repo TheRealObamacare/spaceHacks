@@ -63,10 +63,10 @@ class Renderer {
     console.log('All planet images loaded successfully!');
   }
 
-  // Helper methods for coordinate transformation
+  // Helper methods for coordinate transformation INTEGRATE INTO PREVIOUS CODE
   zoomIn() {
-    this.camera.zoom = 500; // Example zoom level
-    this.camera.followRocket = true; // Enable camera follow
+    this.camera.zoom = 500; // Example zoom level NEEDS TO BE EDITED
+    this.camera.followRocket = true; // Enable camera follow to make sure that the camera follows the spaceship
     this.updateCamera();
     console.log(`Zoomed in: ${this.camera.zoom}`);
   }
