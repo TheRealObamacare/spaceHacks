@@ -152,16 +152,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function displayControls() {
     console.log(`
-    SPACE FLIGHT SIMULATOR CONTROLS:
+    🚀 SPACE FLIGHT SIMULATOR CONTROLS:
     
-    THRUST:
+    🔥 THRUST:
     • ↑ / W - Fire engines
     
-    ROTATION:
+    🔄 ROTATION:
     • ← / A - Rotate left
     • → / D - Rotate right
     
-    SYSTEM:
+    ⚙️ SYSTEM:
     • SPACE - Pause/unpause
     • R - Reset rocket
     `);
