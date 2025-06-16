@@ -71,3 +71,181 @@ class Renderer {
     console.log(`Zoomed in: ${this.camera.zoom}`);
   }
 }
+
+const directions = {
+   up: "up",
+   left: "left",
+   right: "right",
+}
+const keys = {
+   'ArrowUp': directions.up,
+   'ArrowLeft': directions.left,
+   'ArrowRight': directions.right,
+}
+
+const character = document.querySelector(".character");
+const map = document.querySelector(".map");
+
+//start in the middle of the map
+let x = 90;
+let y = 34;
+let pressedDirections = []; //State of which arrow keys we are holding down
+var speed = 0.2; //How many pixels to move per frame
+
+let camera_x = x;
+let camera_y = y;
+
+let pin_to_position = null;
+function toggle_pin_to_position() {
+   pin_to_position = pin_to_position ? null : [100,10];
+}
+
+
+function lerp(currentValue, destinationValue, time) {
+   return currentValue * (1 - time) + destinationValue * time;
+}
+
+const placeCharacter = () => {
+
+   const pixelSize = parseInt(
+       getComputedStyle(document.documentElement).getPropertyValue('--pixel-size')
+   );
+
+   const direction = pressedDirections[0];
+   if (direction) {
+      if (direction === directions.right) {x += speed;}
+      if (direction === directions.left) {x -= speed;}
+      if (direction === directions.up) {y -= speed;}
+      character.setAttribute("facing", direction);
+   }
+   character.setAttribute("walking", direction ? "true" : "false");
+
+   //Limits (gives the illusion of walls)
+   const leftLimit = -8;
+   const rightLimit = (16 * 11)+8;
+   const topLimit = -8 + 32;
+   const bottomLimit = (16 * 7);
+   if (x < leftLimit) { x = leftLimit; }
+   if (x > rightLimit) { x = rightLimit; }
+   if (y < topLimit) { y = topLimit; }
+   if (y > bottomLimit) { y = bottomLimit; }
+
+
+   //Lookahead point
+   const LOOKAHEAD_DISTANCE = 6
+   let lookahead_x = 0;
+   if (direction === directions.left) { lookahead_x -= LOOKAHEAD_DISTANCE; }
+   if (direction === directions.right) { lookahead_x += LOOKAHEAD_DISTANCE; }
+
+   let lookahead_y = 0;
+   if (direction === directions.up) { lookahead_y -= LOOKAHEAD_DISTANCE; }
+
+
+
+   let camera_dest_x = x+lookahead_x;
+   let camera_dest_y = y+lookahead_y;
+   if (pin_to_position) {
+      camera_dest_x = pin_to_position[0];
+      camera_dest_y = pin_to_position[1];
+   }
+
+   //Change the camera's value
+   const lerpSpeed = 0.1;
+   camera_x = lerp(camera_x, camera_dest_x, lerpSpeed);
+   camera_y = lerp(camera_y, camera_dest_y, lerpSpeed);
+
+   const CAMERA_LEFT_OFFSET_PX = 66;
+   const CAMERA_TOP_OFFSET_PX = 42;
+
+   //Update camera
+   const camera_transform_left = -camera_x*pixelSize+(pixelSize * CAMERA_LEFT_OFFSET_PX);
+   const camera_transform_top = -camera_y*pixelSize+(pixelSize * CAMERA_TOP_OFFSET_PX);
+   map.style.transform = `translate3d( ${camera_transform_left}px, ${camera_transform_top}px, 0 )`;
+
+   //Update character
+   character.style.transform = `translate3d( ${x*pixelSize}px, ${y*pixelSize}px, 0 )`;
+}
+
+
+//Set up the game loop
+let previousMs;
+const stepTime = 1 / 60;
+const tick = (timestampMs) => {
+   if (previousMs === undefined) {
+      previousMs = timestampMs;
+   }
+   let delta = (timestampMs - previousMs) / 1000;
+   while (delta >= stepTime) {
+      placeCharacter();
+      delta -= stepTime;
+   }
+   previousMs = timestampMs - delta * 1000; // Make sure we don't lose unprocessed (delta) time
+
+   //Recapture the callback to be able to shut it off
+   requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick); //kick off the first step!
+
+
+/* Direction key state */
+document.addEventListener("keydown", (e) => {
+   const dir = keys[e.code];
+   if (dir && pressedDirections.indexOf(dir) === -1) {
+      pressedDirections.unshift(dir)
+   }
+})
+
+document.addEventListener("keyup", (e) => {
+   const dir = keys[e.code];
+   const index = pressedDirections.indexOf(dir);
+   if (index > -1) {
+      pressedDirections.splice(index, 1)
+   }
+});
+
+
+
+/* BONUS! Dpad functionality for mouse and touch */
+let isPressed = false;
+const removePressedAll = () => {
+   document.querySelectorAll(".dpad-button").forEach(d => {
+      d.classList.remove("pressed")
+   })
+}
+document.body.addEventListener("mousedown", () => {
+   isPressed = true;
+})
+document.body.addEventListener("mouseup", () => {
+   isPressed = false;
+   pressedDirections = [];
+   removePressedAll();
+})
+const handleDpadPress = (direction, click) => {
+   if (click) {
+      isPressed = true;
+   }
+   pressedDirections = (isPressed) ? [direction] : []
+
+   if (isPressed) {
+      removePressedAll();
+      document.querySelector(".dpad-"+direction).classList.add("pressed");
+   }
+}
+//Bind a ton of events for the dpad
+document.querySelector(".dpad-left").addEventListener("touchstart", (e) => handleDpadPress(directions.left, true));
+document.querySelector(".dpad-up").addEventListener("touchstart", (e) => handleDpadPress(directions.up, true));
+document.querySelector(".dpad-right").addEventListener("touchstart", (e) => handleDpadPress(directions.right, true));
+document.querySelector(".dpad-down").addEventListener("touchstart", (e) => handleDpadPress(directions.down, true));
+
+document.querySelector(".dpad-left").addEventListener("mousedown", (e) => handleDpadPress(directions.left, true));
+document.querySelector(".dpad-up").addEventListener("mousedown", (e) => handleDpadPress(directions.up, true));
+document.querySelector(".dpad-right").addEventListener("mousedown", (e) => handleDpadPress(directions.right, true));
+document.querySelector(".dpad-down").addEventListener("mousedown", (e) => handleDpadPress(directions.down, true));
+
+document.querySelector(".dpad-left").addEventListener("mouseover", (e) => handleDpadPress(directions.left));
+document.querySelector(".dpad-up").addEventListener("mouseover", (e) => handleDpadPress(directions.up));
+document.querySelector(".dpad-right").addEventListener("mouseover", (e) => handleDpadPress(directions.right));
+document.querySelector(".dpad-down").addEventListener("mouseover", (e) => handleDpadPress(directions.down));
+
+
+document.querySelector(".pin-button").addEventListener("click", () => toggle_pin_to_position());
