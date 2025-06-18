@@ -1,192 +1,248 @@
-// Keyboard input handling for Space Flight Simulator
+// Global renderer instance
+let renderer;
+// Mouse interaction variables for camera panning
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
 
 // Track which keys are currently pressed
 const keys = {};
 
 // Game state variables
-let isPaused = false;
-let lastSpacePress = 0; // To prevent rapid pause/unpause toggle
+let isAppPaused = false; 
+let lastSpacePress = 0; 
+let gameLoopRequestId = null; 
+
+console.log("app.js starting to run");
 
 // Initialize keyboard event listeners
-function initKeyboardControls() {    // Key down event - when a key is pressed
+function initKeyboardControls() {
     document.addEventListener('keydown', (event) => {
         keys[event.code] = true;
-        
-        // Handle pause/unpause with spacebar (single press toggle)
         if (event.code === 'Space') {
             const now = Date.now();
-            if (now - lastSpacePress > 200) { // 200ms debounce
-                togglePause();
-                lastSpacePress = now;
-            }
-            event.preventDefault();
-            return;
+            if (now - lastSpacePress > 200) { appTogglePause(); lastSpacePress = now; }
+            event.preventDefault(); return;
         }
-        
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) {
+        if (event.code === 'KeyF') {
+            if (renderer) renderer.toggleFollowRocket();
             event.preventDefault();
         }
-        
-        console.log(`Key pressed: ${event.code} (${event.key})`);
-    });
-    
-    // Key up event - when a key is released
-    document.addEventListener('keyup', (event) => {
-        keys[event.code] = false;
-        console.log(`Key released: ${event.code} (${event.key})`);
-    });
-    
-    // Lose focus handling - reset all keys when window loses focus
-    window.addEventListener('blur', () => {
-        for (let key in keys) {
-            keys[key] = false;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR'].includes(event.code)) {
+            event.preventDefault(); // so the site doesnt move when pressing keys
         }
     });
+    document.addEventListener('keyup', (event) => { keys[event.code] = false; });
+    window.addEventListener('blur', () => { for (let key in keys) keys[key] = false; });
+    console.log("Keyboard controls working");
 }
 
-// Check if a specific key is currently pressed
-function isKeyPressed(keyCode) {
-    return keys[keyCode] || false;
+function isKeyPressed(keyCode) { 
+    return keys[keyCode] || false; 
 }
 
-// Handle rocket controls based on keyboard input
 function handleRocketControls() {
-    // Skip controls if game is paused
-    if (isPaused) {
+    if (isAppPaused) 
         return;
+    if (isKeyPressed('ArrowUp') || isKeyPressed('KeyW')) 
+        window.rocketThrust = Math.min((window.rocketThrust || 0) + 200, 10000); 
+    else window.rocketThrust = Math.max((window.rocketThrust || 0) - 100, 0); 
+    if (isKeyPressed('ArrowLeft') || isKeyPressed('KeyA')) 
+        window.angle = (window.angle || 0) - 2; 
+    if (isKeyPressed('ArrowRight') || isKeyPressed('KeyD')) 
+        window.angle = (window.angle || 0) + 2; 
+    if (window.angle < 0)
+        window.angle += 360; 
+    if (window.angle >= 360) 
+        window.angle -= 360;
+    if (isKeyPressed('KeyR')) 
+        appResetRocket();
+}
+
+function appResetRocket() {
+    if (typeof window.resetRocket === 'function') window.resetRocket();
+    else { window.rocketThrust=0; window.rocketVelocityX=0; window.rocketVelocityY=0; window.positionX=0; window.positionY=0; window.angle=0; window.rocketFuel=100; console.warn("physics.js resetRocket not on window."); }
+    if (renderer) { 
+        renderer.camera.followRocket = true; renderer.camera.panX = 0; renderer.camera.panY = 0;
+        if (typeof window.getRocketState === 'function' && typeof window.celestialBodies !== 'undefined') {
+            const rs = window.getRocketState(); renderer.render(rs, window.celestialBodies);
+            if (typeof window.updateHUDWithVectorData === 'function')
+                window.updateHUDWithVectorData();
+            const ip = document.getElementById('info-position');
+            if(ip&&rs.position)
+                ip.textContent=`X:${rs.position.x.toExponential(2)},Y:${rs.position.y.toExponential(2)}`;
+            const inb = document.getElementById('info-nearest-body');
+            if(inb&&rs.nearestBody)
+                inb.textContent=`${rs.nearestBody.name}(${rs.nearestBody.distance.toExponential(2)}m)`;
+        } else renderer.render(null,null);
     }
-    
-    // Thrust controls - removed Space, now only Arrow Up and W
-    if (isKeyPressed('ArrowUp') || isKeyPressed('KeyW')) {
-        // Increase thrust
-        if (rocketFuel > 0) {
-            rocketThrust = Math.min(rocketThrust + 100, 10000); // Max thrust limit
-            // Continuous fuel consumption while thrust key is held
-            rocketFuel = Math.max(0, rocketFuel - 0.05); // Consume fuel continuously
+    console.log('Rocket and Camera initialized in place.');
+}
+
+function appTogglePause() {
+    isAppPaused = !isAppPaused; window.isPaused = isAppPaused;
+    console.log(isAppPaused ? 'Game Paused (app)' : 'Game Resumed (app)');
+    const hud = document.getElementById('hud'); let pi = document.getElementById('pause-indicator');
+    if (isAppPaused) {
+        if(hud) 
+            hud.style.opacity = '0.5';
+        if (!pi) { 
+            pi = document.createElement('div');
+            pi.id='pause-indicator'; document.body.appendChild(pi);
+            Object.assign(pi.style, {position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,0.8)',color:'white',padding:'20px',borderRadius:'10px',fontSize:'24px',fontWeight:'bold',zIndex:'10000'});
         }
-    } else {
-        // Decrease thrust when not pressing thrust key
-        rocketThrust = Math.max(rocketThrust - 50, 0);
-    }
-    
-    // Rotation controls - NO fuel consumption for rotation (using reaction wheels/gyroscopes)
-    if (isKeyPressed('ArrowLeft') || isKeyPressed('KeyA')) {
-        angle -= 2; // Rotate left (no fuel cost)
-    }
-    if (isKeyPressed('ArrowRight') || isKeyPressed('KeyD')) {
-        angle += 2; // Rotate right (no fuel cost)
-    }
-    
-    // Keep angle within 0-360 degrees
-    if (angle < 0) angle += 360;
-    if (angle >= 360) angle -= 360;
-    
-    // Additional controls
-    if (isKeyPressed('KeyR')) {
-        // Reset rocket position and velocity
-        resetRocket();
+        pi.textContent = 'PAUSED - Press SPACE to resume'; pi.style.display = 'block';
+    } 
+    else {
+        if(hud) hud.style.opacity = '1'; if (pi) pi.style.display = 'none';
     }
 }
 
-// Example functions for rocket control (you'll need to implement these)
-function resetRocket() {
-    rocketThrust = 0;
-    rocketVelocityX = 0;
-    rocketVelocityY = 0;
-    positionX = 0;
-    positionY = 0;
-    angle = 0;
-    rocketFuel = 100;
-    console.log('Rocket reset');
+// Zoom control scroll
+function handleWheelZoom(event) {
+    if (!renderer) return;
+    event.preventDefault(); // Prevent page scrolling
+    const zoomFactor = 0.05; 
+    const currentZoom = renderer.camera.zoom;
+    let newZoom;
+    if (event.deltaY < 0) 
+        newZoom = currentZoom / (1 - zoomFactor); // Zoom in
+    else 
+        newZoom = currentZoom * (1 - zoomFactor); // Zoom out
+    renderer.setZoom(newZoom);
 }
 
-function togglePause() {
-    isPaused = !isPaused;
-    console.log(isPaused ? 'Game Paused' : 'Game Resumed');
-    
-    // You can add visual feedback here, like showing a pause overlay
-    const hudElement = document.getElementById('hud');
-    if (hudElement) {
-        if (isPaused) {
-            hudElement.style.opacity = '0.5';
-            // Add pause indicator
-            let pauseIndicator = document.getElementById('pause-indicator');
-            if (!pauseIndicator) {
-                pauseIndicator = document.createElement('div');
-                pauseIndicator.id = 'pause-indicator';
-                pauseIndicator.style.cssText = `
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: rgba(0, 0, 0, 0.8);
-                    color: white;
-                    padding: 20px;
-                    border-radius: 10px;
-                    font-size: 24px;
-                    font-weight: bold;
-                    z-index: 1000;
-                `;
-                pauseIndicator.textContent = 'PAUSED - Press SPACE to resume';
-                document.body.appendChild(pauseIndicator);
-            }
-        } else {
-            hudElement.style.opacity = '1';
-            // Remove pause indicator
-            const pauseIndicator = document.getElementById('pause-indicator');
-            if (pauseIndicator) {
-                pauseIndicator.remove();
-            }
-        }
+function handleMouseDown(event) {
+    if (!renderer) return;
+    if (event.button === 0) { // Left mouse button for panning so there is user defined camera controls idk
+        isDragging = true;
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+        renderer.camera.followRocket = false; 
+        event.target.style.cursor = 'grabbing';
     }
 }
 
-// Initialize controls when page loads
+function handleMouseMove(event) {
+    if (!renderer || !isDragging) return;
+    const deltaX = event.clientX - lastMouseX;
+    const deltaY = event.clientY - lastMouseY;
+    // Panning should be inverse to mouse movement so the camera moves in the opposite direction and shows that everything is moving as intended
+    renderer.panCamera(-deltaX, -deltaY); 
+    lastMouseX = event.clientX;
+    lastMouseY = event.clientY;
+}
+
+function handleMouseUp(event) {
+    if (event.button === 0) { // Left mouse button
+        isDragging = false;
+        const canvas = document.getElementById('simulationCanvas');
+        if(canvas) canvas.style.cursor = 'grab';
+    }
+}
+
+function handleMouseLeave(event) {
+    isDragging = false;
+    const canvas = document.getElementById('simulationCanvas');
+    if(canvas) 
+        canvas.style.cursor = 'grab'; // Reset to grab if it was grabbing
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    initKeyboardControls();
-    console.log('Keyboard controls initialized');
+    console.log("DOMContentLoaded: app.js (v4 - camera controls)");
+    const canvas = document.getElementById('simulationCanvas');
+    if (!canvas) { console.error("Canvas #simulationCanvas not found!"); return; }
+    canvas.style.cursor = 'grab';
+
+    if (typeof window.Renderer === 'function') {
+        renderer = new window.Renderer(); 
+        renderer.initialize(canvas);
+        console.log("Renderer initialized.");
+    } else {
+        console.error("Renderer class not found!");
+        renderer = { render: ()=>{}, camera:{}, toggleFollowRocket:()=>{}, initialize:()=>{} }; // Dummy
+    }
+
+    initKeyboardControls(); 
     
-    // Display controls to user
+    // Camera control event listeners
+    canvas.addEventListener('wheel', handleWheelZoom, { passive: false });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove); // Use window for mousemove to allow dragging outside canvas
+    window.addEventListener('mouseup', handleMouseUp);     // Use window for mouseup
+    canvas.addEventListener('mouseleave', handleMouseLeave);
+
+
+    const startButton = document.getElementById('start-btn');
+    if (startButton) {
+        startButton.addEventListener('click', () => {
+            if (gameLoopRequestId !== null) cancelAnimationFrame(gameLoopRequestId);
+            appResetRocket(); 
+            isAppPaused = false; window.isPaused = false; 
+            const pi = document.getElementById('pause-indicator'); if(pi) pi.style.display = 'none';
+            const hud = document.getElementById('hud'); if(hud) hud.style.opacity = '1';
+            gameLoop(); 
+            startButton.textContent = "Restart Simulation";
+        });
+    } 
+    else
+        console.warn("#start-btn not found.");
+    const resetButton = document.getElementById('reset-btn');
+    if (resetButton) resetButton.addEventListener('click', appResetRocket);
+    else
+        console.warn("#reset-btn not found.");
+
     displayControls();
+
+    if (renderer) {
+        try {
+            const rs = (typeof window.getRocketState==='function')?window.getRocketState():{position:{x:0,y:0},nearestBody:{name:'N/A',distance:0}};
+            renderer.render(rs, (typeof window.celestialBodies!=='undefined')?window.celestialBodies:null);
+            if(typeof window.updateHUDWithVectorData==='function')
+                window.updateHUDWithVectorData();
+            else if(typeof window.updateHUD==='function')
+                window.updateHUD();
+            const ip=document.getElementById('info-position');
+            if(ip&&rs.position)
+                ip.textContent=`X:${rs.position.x.toExponential(2)},Y:${rs.position.y.toExponential(2)}`;
+            const inb=document.getElementById('info-nearest-body');
+            if(inb&&rs.nearestBody)
+                inb.textContent=`${rs.nearestBody.name}(${rs.nearestBody.distance.toExponential(2)}m)`;
+        } catch (e) { console.error("Error in initial render/HUD:", e); }
+    }
 });
 
 function displayControls() {
     console.log(`
     SPACE FLIGHT SIMULATOR CONTROLS:
-    
-    THRUST:
-    • ↑ / W - Fire engines
-    
-    ROTATION:
-    • ← / A - Rotate left
-    • → / D - Rotate right
-    
-    SYSTEM:
-    • SPACE - Pause/unpause
-    • R - Reset rocket
+    THRUST: ↑ / W | ROTATION: ← / A (Left), → / D (Right)
+    SYSTEM: SPACE (Pause/Resume), R (Reset Rocket), F (Toggle Camera Follow)
+    CAMERA: Mouse Wheel (Zoom), Left-Click + Drag (Pan)
     `);
 }
 
-// Game loop function to handle continuous input
 function gameLoop() {
-    handleRocketControls();
-    
-    // Update physics if not paused
-    if (!isPaused) {
-        // Update physics with a fixed time step (1/60 second)
-        const deltaTime = 1/60;
-        const physicsState = updateRocketPhysics(deltaTime);
-        
-        // Update HUD with comprehensive vector data
-        updateHUDWithVectorData();
-        
-        // Optional: Log detailed vector analysis for debugging
-        // const analysis = getVectorAnalysis();
-        // console.log('Vector Analysis:', analysis);
+    handleRocketControls(); 
+    if (!isAppPaused) { 
+        if (typeof window.calculateRocketThrust === 'function') window.calculateRocketThrust(); 
+        const dt = 1/60; 
+        if (typeof window.updateRocketPhysics === 'function') window.updateRocketPhysics(dt); 
+        if (renderer && typeof window.getRocketState === 'function' && typeof window.celestialBodies !== 'undefined') {
+            const rs = window.getRocketState(); 
+            renderer.render(rs, window.celestialBodies); 
+            if (typeof window.updateHUDWithVectorData === 'function') 
+                window.updateHUDWithVectorData();
+            else if(typeof window.updateHUD === 'function') 
+                window.updateHUD();
+            const ip=document.getElementById('info-position');
+            
+            if(ip&&rs.position)
+                ip.textContent=`X:${rs.position.x.toExponential(2)},Y:${rs.position.y.toExponential(2)}`;
+            const inb=document.getElementById('info-nearest-body');
+            if(inb&&rs.nearestBody)
+                inb.textContent=`${rs.nearestBody.name}(${rs.nearestBody.distance.toExponential(2)}m)`;
+        }
     }
-    
-    requestAnimationFrame(gameLoop);
+    gameLoopRequestId = requestAnimationFrame(gameLoop);
 }
-
-// Start the game loop
-// gameLoop();
+console.log("app.js fully run");

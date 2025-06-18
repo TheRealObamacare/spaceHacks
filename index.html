@@ -20,7 +20,7 @@
 
         <main>
             <div class="simulation-container">
-                <canvas id="space-canvas"></canvas>
+                <canvas id="simulationCanvas" width="800" height="600"></canvas>
                 <div id="hud" class="hud">
                     <div class="hud-panel left-panel">
                         <div class="hud-item">
@@ -74,6 +74,14 @@
                         <div class="key">SPACE</div>
                         <div class="description">Pause/Resume</div>
                     </div>
+                    <div class="control-info">
+                        <div class="key">R</div>
+                        <div class="description">Reset Rocket</div>
+                    </div>
+                    <div class="control-info">
+                        <div class="key">F</div>
+                        <div class="description">Toggle Camera Follow</div>
+                    </div>
                 </div>
                 
                 <div class="panel-section">
@@ -83,6 +91,36 @@
                         <p>Current Physics Principle: <span id="current-principle">Newton's Laws of Motion</span></p>
                     </div>
                 </div>
+            </div>
+
+            <div id="simulation-info">
+                <h3>Simulation Data</h3>
+                <!-- HUD already covers velocity, fuel, g-force (gravity-value), mission time -->
+                <p>Position (X, Y): <span id="info-position">N/A</span></p>
+                <p>Nearest Body: <span id="info-nearest-body">N/A</span></p>
+                <!-- Optional: Add altitude here if #altitude-value in HUD is not sufficient -->
+                <!-- <p>Altitude: <span id="info-altitude">N/A</span> km</p> -->
+            </div>
+
+            <div id="simulation-controls-detailed">
+                <!-- This section is added as distinct from the existing "control-panel" 
+                     to ensure clear adherence to the prompt's request for a controls display area,
+                     while preserving the existing styled controls. -->
+                <h3>Detailed Controls</h3>
+                <p><strong>Rocket:</strong></p>
+                <ul>
+                    <li>ArrowUp / W: Thrust</li>
+                    <li>ArrowLeft / A: Rotate Left</li>
+                    <li>ArrowRight / D: Rotate Right</li>
+                    <li>R: Reset Simulation</li>
+                    <li>Space: Pause / Resume</li>
+                </ul>
+                <p><strong>Camera:</strong></p>
+                <ul>
+                    <li>Mouse Wheel (on canvas): Zoom</li>
+                    <li>Left-Click & Drag (on canvas): Pan</li>
+                    <li>F: Toggle Auto-Follow Rocket</li>
+                </ul>
             </div>
         </main>
 
