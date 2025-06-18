@@ -26,16 +26,15 @@ class Renderer {
 
   async loadPlanetImages() {
     const planetImagePaths = {
-      sun: 'images/sun_placeholder.jpg', // Placeholder, WHY DO I NOT HAVE A SUN IMAGE
+      sun: 'images/sun_full_disk_view_of_the_sun_june_21_2010_GSFC_20171208_Archive_e002035.jpg',
       mercury: 'images/mercury_a_global_view_of_mercury_surface_PIA12051.jpg',
       venus: 'images/venus_venus_computer_simulated_global_view_of_northern_hemisphere_PIA00252.jpg',
       earth: 'images/earth_most_amazing_high_definition_image_of_earth_blue_marble_2012_GSFC_20171208_Archive_e001386.jpg',
-      mars: 'images/mars_mars_full_disk_image_PIA00009.jpg', // i think i deleted this for some reason
-      jupiter: 'images/jupiter_jupiter_ PIA00001.jpg', // why am i missing so many
+      mars: 'images/mars_mars_viking_global_color_view_PIA00407.jpg',
+      jupiter: 'images/jupiter_jupiter_full_disk_from_voyager_1_PIA01371.jpg',
       saturn: 'images/saturn_saturn_bright_through_rings_PIA12557.jpg',
       uranus: 'images/uranus_uranus_as_seen_by_nasa_voyager_2_PIA18182.jpg',
       neptune: 'images/neptune_neptune_PIA02209.jpg'
-      // pluto?
     };
     
     console.log('Loading planet images...');
@@ -93,10 +92,11 @@ class Renderer {
     if (celestialBodiesData) {
       for (const key in celestialBodiesData) {
         const body = celestialBodiesData[key];
-        const image = this.planetImages[body.imageKey || key.toLowerCase()];
+        const imageKey = body.imageKey || key.toLowerCase();
+        const image = this.planetImages[imageKey];
         
         // Determine display size - for now, fixed apparent size in pixels
-        const apparentSizeOnScreen = body.imageKey === 'sun' ? 50 : 20; // Sun larger because it just is
+        const apparentSizeOnScreen = (imageKey === 'sun' || key.toLowerCase() === 'sun') ? 50 : 20; // Sun larger because it just is
         const displaySizeInWorldUnits = apparentSizeOnScreen / this.camera.zoom;
 
         if (image) {

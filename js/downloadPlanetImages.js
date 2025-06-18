@@ -13,16 +13,15 @@ if (!fs.existsSync(imagesDir)) {
   fs.mkdirSync(imagesDir, { recursive: true });
 }
 
-async function searchPlanetImages(planetName) {
-  // Predefined successful search results for problematic planets
+async function searchPlanetImages(planetName) {  // Predefined successful search results for problematic planets
   const predefinedImages = {
     'Jupiter': {
       search: 'Jupiter Voyager true color',
       nasa_id: 'PIA01371',  // Jupiter - Full Disk from Voyager 1
-      title: 'Jupiter - Full Disk',
+      title: 'Jupiter - Full Disk from Voyager 1',
       description: 'This image of Jupiter was taken by Voyager 1 and has been processed to show the planet in true color.',
       collection: 'https://images-api.nasa.gov/asset/PIA01371',
-      thumbnail: 'https://images-assets.nasa.gov/image/PIA01371/PIA01371~thumb.jpg'
+      direct_url: 'https://images-assets.nasa.gov/image/PIA01371/PIA01371~orig.jpg'
     },
     'Mars': {
       search: 'Mars Viking globe',
@@ -30,7 +29,7 @@ async function searchPlanetImages(planetName) {
       title: 'Mars - Viking Global Color View',
       description: 'This is a full-disk view of Mars captured by the Viking mission in true color.',
       collection: 'https://images-api.nasa.gov/asset/PIA00407',
-      thumbnail: 'https://images-assets.nasa.gov/image/PIA00407/PIA00407~thumb.jpg'
+      direct_url: 'https://images-assets.nasa.gov/image/PIA00407/PIA00407~orig.jpg'
     }
   };
   
@@ -39,9 +38,15 @@ async function searchPlanetImages(planetName) {
     console.log(`   Using predefined best image for ${planetName}`);
     return predefinedImages[planetName];
   }
-  
-  // Planet-specific search strategies to find the best full planet images
+    // Planet-specific search strategies to find the best full planet images
   const planetSpecificQueries = {
+    'Sun': [
+      'Sun solar disk',
+      'Sun full disk',
+      'Sun SDO full disk',
+      'Sun SOHO full disk',
+      'Sun whole sun'
+    ],
     'Mercury': [
       'Mercury MESSENGER global mosaic',
       'Mercury MESSENGER color',
@@ -503,7 +508,7 @@ function cleanFilename(filename) {
 // Main function to download all planet images
 async function downloadAllPlanetImages() {
   const planets = [
-    'Mercury', 'Venus', 'Earth', 'Mars', 
+    'Sun', 'Mercury', 'Venus', 'Earth', 'Mars', 
     'Jupiter', 'Saturn', 'Uranus', 'Neptune'
   ];
   
@@ -518,11 +523,17 @@ async function downloadAllPlanetImages() {
         console.log(`❌ No suitable image found for ${planet}\n`);
         continue;
       }
-      
-      console.log(`Found: ${bestImage.title}`);
+        console.log(`Found: ${bestImage.title}`);
       console.log(`🔍 Getting high-resolution URL...`);
       
-      const highResUrl = await getHighResImageUrl(bestImage.collection);
+      let highResUrl;
+      if (bestImage.direct_url) {
+        // Use direct URL for predefined images
+        highResUrl = bestImage.direct_url;
+      } else {
+        // Get high-res URL from collection for regular images
+        highResUrl = await getHighResImageUrl(bestImage.collection);
+      }
       
       if (!highResUrl) {
         console.log(`❌ No high-resolution image available for ${planet}\n`);
