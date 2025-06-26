@@ -3,202 +3,1166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Flight Simulator - SpaceHacks</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>Solar System Rocket Physics Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+            color: #00ff00;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2000;
+            pointer-events: none; /* Allow the simulation to be visible underneath */
+        }
+
+        #start-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            color: #00ff00;
+            text-align: center;
+            padding-bottom: 40px;
+            pointer-events: auto;
+        }
+
+        #start-title {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+            font-weight: bold;
+        }
+
+        #start-subtitle {
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+            color: #00ff00;
+            max-width: 600px;
+            line-height: 1.4;
+        }
+
+        #start-mission-btn {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            box-shadow: 0 0 20px #00ff00;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+
+        #start-mission-btn:hover {
+            background: #44ff44;
+            box-shadow: 0 0 30px #00ff00;
+            transform: scale(1.05);
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #00ff00;
+            min-width: 280px;
+            font-size: 12px;
+            transition: opacity 0.3s ease;
+        }
+        
+        #ui.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .control-group {
+            margin-bottom: 12px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #00ffff;
+        }
+        
+        .control-row {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+        
+        button {
+            background: #001100;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            border-radius: 3px;
+        }
+        
+        button:hover {
+            background: #006500;
+        }
+        
+        button:active, button.active {
+            background: #00ff00;
+            color: #000;
+        }
+        
+        .info {
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+        
+        .fuel-bar {
+            width: 100%;
+            height: 12px;
+            background: #333;
+            border: 1px solid #00ff00;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        
+        .fuel-fill {
+            height: 100%;
+            background: #00ff00;
+            transition: width 0.3s, background-color 0.3s;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #00ff00;
+            font-size: 10px;
+            max-width: 320px;
+            transition: opacity 0.3s ease;
+        }
+        
+        #instructions.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .warning {
+            color: #ff4444;
+            font-weight: bold;
+        }
+        
+        .good {
+            color: #44ff44;
+        }
+        
+        .caution {
+            color: #ffff44;
+        }
+
+        #crash-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #crash-content {
+            background: #000;
+            border: 2px solid #ff4444;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            color: #ff4444;
+            font-size: 16px;
+        }
+
+        #crash-content h2 {
+            color: #ff4444;
+            margin-bottom: 20px;
+        }
+
+        #restart-btn {
+            background: #ff4444;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Space Flight Simulator</h1>
-            <div class="navigation">
-                <button id="start-btn" class="primary-btn">Start Simulation</button>
-                <button id="reset-btn" class="secondary-btn">Reset</button>
-                <button id="help-btn" class="info-btn"><i class="fas fa-question-circle"></i> Help</button>
+    <div id="container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- Start Screen -->
+        <div id="start-screen">
+            <div id="start-overlay">
+                <h1 id="start-title">🚀 Solar System Explorer</h1>
+                <p id="start-subtitle">Navigate through the solar system using realistic physics and orbital mechanics</p>
+                <button id="start-mission-btn">Start Mission</button>
             </div>
-        </header>
-
-        <main>
-            <div class="simulation-container">
-                <canvas id="simulationCanvas" width="800" height="600"></canvas>
-                <div id="hud" class="hud">
-                    <div class="hud-panel left-panel">
-                        <div class="hud-item">
-                            <div class="hud-label">Velocity</div>
-                            <div id="velocity-value" class="hud-value">0 km/s</div>
-                        </div>
-                        <div class="hud-item">
-                            <div class="hud-label">Acceleration</div>
-                            <div id="acceleration-value" class="hud-value">0 m/s²</div>
-                        </div>
-                        <div class="hud-item">
-                            <div class="hud-label">Distance</div>
-                            <div id="altitude-value" class="hud-value">0 km</div>
-                        </div>
-                    </div>
-                    <div class="hud-panel right-panel">
-                        <div class="hud-item">
-                            <div class="hud-label">Fuel</div>
-                            <div class="progress-bar">
-                                <div id="fuel-bar" class="progress-fill"></div>
-                            </div>
-                        </div>
-                        <div class="hud-item">
-                            <div class="hud-label">Gravity</div>
-                            <div id="gravity-value" class="hud-value">1.0 G</div>
-                        </div>
-                        <div class="hud-item">
-                            <div class="hud-label">Mission Time</div>
-                            <div id="mission-time" class="hud-value">00:00:00</div>
-                        </div>
-                    </div>
+        </div>
+        
+        <div id="ui">
+            <div class="control-group">
+                <label>🚀 Rocket Controls:</label>
+                <div class="control-row">
+                    <button id="thrustUp" data-key="ArrowUp">↑ Thrust</button>
+                    <button id="rotateLeft" data-key="ArrowLeft">↺ Left</button>
+                    <button id="rotateRight" data-key="ArrowRight">↻ Right</button>
                 </div>
             </div>
             
-            <div class="control-panel">
-                <div class="panel-section">
-                    <h3>Controls</h3>
-                    <div class="control-info">
-                        <div class="key">W</div>
-                        <div class="description">Thrust Forward</div>
+            <div class="control-group">
+                <label>⚙️ Simulation:</label>
+                <div class="control-row">
+                    <button id="resetRocket">Reset</button>
+                    <button id="pausePlay">Pause</button>
+                    <button id="followToggle">Follow: ON</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>🔍 Zoom:</label>
+                <div class="control-row">
+                    <button id="zoomIn">Zoom In</button>
+                    <button id="zoomOut">Zoom Out</button>
+                    <button id="resetZoom">Reset View</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>📊 Telemetry:</label>
+                <div class="info">
+                    <div class="info-row">
+                        <span>Speed:</span>
+                        <span id="speed" class="good">0 km/s</span>
                     </div>
-                    <div class="control-info">
-                        <div class="key">A</div>
-                        <div class="description">Turn Left</div>
+                    <div class="info-row">
+                        <span>Altitude:</span>
+                        <span id="altitude">0 km</span>
                     </div>
-                    <div class="control-info">
-                        <div class="key">D</div>
-                        <div class="description">Turn Right</div>
+                    <div class="info-row">
+                        <span>G-Force:</span>
+                        <span id="gforce">0.0 G</span>
                     </div>
-                    <div class="control-info">
-                        <div class="key">SPACE</div>
-                        <div class="description">Pause/Resume</div>
+                    <div class="info-row">
+                        <span>Nearest:</span>
+                        <span id="nearest">Earth</span>
                     </div>
-                    <div class="control-info">
-                        <div class="key">R</div>
-                        <div class="description">Reset Rocket</div>
+                    <div class="info-row">
+                        <span>Fuel:</span>
+                        <span id="fuel-percent">100%</span>
                     </div>
-                    <div class="control-info">
-                        <div class="key">F</div>
-                        <div class="description">Toggle Camera Follow</div>
+                    <div class="fuel-bar">
+                        <div class="fuel-fill" id="fuel-fill"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+        
+        <div id="instructions">
+            <strong>🎮 Controls:</strong><br>
+            • ↑ Arrow: Main thrust (uses fuel)<br>
+            • ← → Arrows: Rotate rocket<br>
+            • Mouse: Pan view (disables follow)<br>
+            • Scroll: Zoom in/out<br>
+            • Space: Pause/unpause<br>
+            • F: Toggle follow rocket<br>
+            <br>
+            <strong>⚠️ Physics:</strong><br>
+            • Realistic orbital mechanics<br>
+            • Fuel consumption & mass changes<br>
+            • Asteroid field collisions<br>
+            • Gravitational assists possible<br>
+        </div>
+
+        <div id="crash-modal">
+            <div id="crash-content">
+                <h2>MISSION FAILURE!</h2>
+                <p id="crash-message">Your rocket has crashed!</p>
+                <button id="restart-btn">Restart Mission</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const G = 6.67430e-11;
+        const TIME_SCALE = 100;
+
+        const SUN_RADIUS = 6.9634e8;
+        const SUN_MASS = 1.989e30;
+        const MERCURY_RADIUS = 2.4397e6;
+        const MERCURY_MASS = 3.3011e23;
+        const VENUS_RADIUS = 6.0518e6;
+        const VENUS_MASS = 4.8675e24;
+        const EARTH_RADIUS = 6.371e6;
+        const EARTH_MASS = 5.972e24;
+        const MARS_RADIUS = 3.3895e6;
+        const MARS_MASS = 6.4171e23;
+        const JUPITER_RADIUS = 6.9911e7;
+        const JUPITER_MASS = 1.898e27;
+        const SATURN_RADIUS = 5.8232e7;
+        const SATURN_MASS = 5.683e26;
+        const URANUS_RADIUS = 2.5362e7;
+        const URANUS_MASS = 8.681e25;
+        const NEPTUNE_RADIUS = 2.4622e7;
+        const NEPTUNE_MASS = 1.024e26;        const ROCKET_DRY_MASS = 5000;
+        const FUEL_MASS = 15000;
+        const THRUST_POWER = 150000;
+        const FUEL_CONSUMPTION_RATE = 0.8; // Reduced fuel consumption for longer flights
+
+        let rocketFuel = 100;
+        let rocketThrust = 0;
+        let angle = 90;
+        let rocketVelocityX = 0;
+        let rocketVelocityY = 0;
+        let positionX = 0;
+        let positionY = 0;
+
+        let isPaused = false;
+        let followRocket = true;
+        let gameTime = 0;
+        let keys = {};
+        let lastTime = 0;
+        let isStartScreen = true;
+        let slowMotionFactor = 0.15; // For start screen slow motion - more visible effect        const stars = [];
+        function generateStars() {
+            for (let i = 0; i < 3000; i++) {
+                stars.push({
+                    x: (Math.random() - 0.5) * 2e13,
+                    y: (Math.random() - 0.5) * 2e13,
+                    brightness: Math.random() * 0.8 + 0.2,
+                    size: Math.random() * 2.0 + 0.5
+                });
+            }
+        }
+
+        const celestialBodies = {
+            sun: { 
+                x: 0, y: 0, 
+                mass: SUN_MASS, 
+                radius: SUN_RADIUS,
+                color: '#ffff00',
+                glow: true
+            },
+            mercury: { 
+                x: 5.79e10, y: 0, 
+                mass: MERCURY_MASS, 
+                radius: MERCURY_RADIUS,
+                distance: 5.79e10, 
+                period: 88 * 24 * 3600,
+                angle: 0,
+                color: '#8c7853'
+            },
+            venus: { 
+                x: 1.08e11, y: 0, 
+                mass: VENUS_MASS, 
+                radius: VENUS_RADIUS,
+                distance: 1.08e11, 
+                period: 225 * 24 * 3600,
+                angle: 45,
+                color: '#ffc649'
+            },
+            earth: { 
+                x: 1.496e11, y: 0, 
+                mass: EARTH_MASS, 
+                radius: EARTH_RADIUS,
+                distance: 1.496e11, 
+                period: 365 * 24 * 3600,
+                angle: 90,
+                color: '#6b93d6'
+            },
+            mars: { 
+                x: 2.279e11, y: 0, 
+                mass: MARS_MASS, 
+                radius: MARS_RADIUS,
+                distance: 2.279e11, 
+                period: 687 * 24 * 3600,
+                angle: 135,
+                color: '#cd5c5c'
+            },
+            jupiter: { 
+                x: 7.786e11, y: 0, 
+                mass: JUPITER_MASS, 
+                radius: JUPITER_RADIUS,
+                distance: 7.786e11, 
+                period: 4333 * 24 * 3600,
+                angle: 180,
+                color: '#d2691e'
+            },
+            saturn: { 
+                x: 1.432e12, y: 0, 
+                mass: SATURN_MASS, 
+                radius: SATURN_RADIUS,
+                distance: 1.432e12, 
+                period: 10759 * 24 * 3600,
+                angle: 225,
+                color: '#fad5a5',
+                hasRings: true
+            },
+            uranus: { 
+                x: 2.867e12, y: 0, 
+                mass: URANUS_MASS, 
+                radius: URANUS_RADIUS,
+                distance: 2.867e12, 
+                period: 30687 * 24 * 3600,
+                angle: 270,
+                color: '#4fd0e7'
+            },
+            neptune: { 
+                x: 4.515e12, y: 0, 
+                mass: NEPTUNE_MASS, 
+                radius: NEPTUNE_RADIUS,
+                distance: 4.515e12, 
+                period: 60190 * 24 * 3600,
+                angle: 315,
+                color: '#4b70dd'
+            }
+        };        const asteroids = [];
+        function generateAsteroids() {
+            // More dense asteroid belt between Mars and Jupiter
+            const minDistance = 2.2e11; // Closer to Mars
+            const maxDistance = 3.5e11; // Closer to Jupiter
+            const numAsteroids = 500; // More asteroids
+            
+            for (let i = 0; i < numAsteroids; i++) {
+                const distance = minDistance + Math.random() * (maxDistance - minDistance);
+                const angle = Math.random() * Math.PI * 2;
+                const size = 2000 + Math.random() * 8000; // Smaller asteroids
                 
-                <div class="panel-section">
-                    <h3>Physics Info</h3>
-                    <div id="physics-info" class="info-box">
-                        <p>Experiment with orbital mechanics! Try to achieve a stable orbit around celestial bodies.</p>
-                        <p>Current Physics Principle: <span id="current-principle">Newton's Laws of Motion</span></p>
-                    </div>
-                </div>
-            </div>
+                asteroids.push({
+                    x: Math.cos(angle) * distance,
+                    y: Math.sin(angle) * distance,
+                    radius: size,
+                    mass: size * size * size * 2000,
+                    orbitalSpeed: Math.sqrt(G * SUN_MASS / distance),
+                    orbitalAngle: angle,
+                    distance: distance,
+                    rotationSpeed: (Math.random() - 0.5) * 0.1
+                });
+            }
+        }
 
-            <div id="simulation-info">
-                <h3>Simulation Data</h3>
-                <!-- HUD already covers velocity, fuel, g-force (gravity-value), mission time -->
-                <p>Position (X, Y): <span id="info-position">N/A</span></p>
-                <p>Nearest Body: <span id="info-nearest-body">N/A</span></p>
-                <!-- Optional: Add altitude here if #altitude-value in HUD is not sufficient -->
-                <!-- <p>Altitude: <span id="info-altitude">N/A</span> km</p> -->
-            </div>
+        function calculateDistance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
 
-            <div id="simulation-controls-detailed">
-                <!-- This section is added as distinct from the existing "control-panel" 
-                     to ensure clear adherence to the prompt's request for a controls display area,
-                     while preserving the existing styled controls. -->
-                <h3>Detailed Controls</h3>
-                <p><strong>Rocket:</strong></p>
-                <ul>
-                    <li>ArrowUp / W: Thrust</li>
-                    <li>ArrowLeft / A: Rotate Left</li>
-                    <li>ArrowRight / D: Rotate Right</li>
-                    <li>R: Reset Simulation</li>
-                    <li>Space: Pause / Resume</li>
-                </ul>
-                <p><strong>Camera:</strong></p>
-                <ul>
-                    <li>Mouse Wheel (on canvas): Zoom</li>
-                    <li>Left-Click & Drag (on canvas): Pan</li>
-                    <li>F: Toggle Auto-Follow Rocket</li>
-                </ul>
-            </div>
-        </main>
-
-        <div id="modal" class="modal">
-            <div class="modal-content">
-                <span class="close">&times;</span>
-                <div id="modal-content"></div>
-            </div>
-        </div>
-        
-        <!-- Debug panel -->
-        <div id="debug-panel" class="debug-panel">
-            <div class="debug-header">
-                <h3>Debug Information</h3>
-                <button id="debug-toggle-btn">Hide</button>
-            </div>
-            <div id="debug-info">Loading debug info...</div>
-            <div class="debug-tools">
-                <button id="debug-check-btn" class="debug-btn">Check Console Errors</button>
-                <button id="debug-test-config-btn" class="debug-btn">Test Config</button>
-                <button id="debug-test-simulation-btn" class="debug-btn">Test Simulation</button>
-                <button id="debug-test-rendering-btn" class="debug-btn">Test Rendering</button>
-                <button id="debug-force-renderer-btn" class="debug-btn">Force Initialize Renderer</button>
-                <button id="debug-force-nasa-btn" class="debug-btn">Load NASA Data & Images</button>
-                <button id="debug-force-animation-btn" class="debug-btn">Force Animation Loop</button>
-                <button id="debug-direct-start-btn" class="debug-btn">Direct Start Method</button>
-            </div>
+        function calculateGravitationalForce(bodyX, bodyY, bodyMass) {
+            const dx = bodyX - positionX;
+            const dy = bodyY - positionY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
             
-        </div>
-    </div>
+            if (distance === 0) return { fx: 0, fy: 0 };
+            
+            const currentMass = ROCKET_DRY_MASS + (rocketFuel / 100) * FUEL_MASS;
+            const forceMagnitude = (G * bodyMass * currentMass) / (distance * distance);
+            const unitX = dx / distance;
+            const unitY = dy / distance;
+            
+            return {
+                fx: forceMagnitude * unitX,
+                fy: forceMagnitude * unitY
+            };
+        }
 
-    <!-- Tutorial modal content (hidden by default) -->
-    <div id="tutorial-content" style="display: none;">
-        <h2>How to Use the Space Flight Simulator</h2>
-        <p>Welcome to the Space Flight Simulator! This educational tool helps you learn about orbital mechanics and physics in space.</p>
+        function calculateThrustForce() {
+            if (rocketThrust === 0 || rocketFuel <= 0) return { fx: 0, fy: 0 };
+            
+            const angleRad = (angle * Math.PI) / 180;
+            return {
+                fx: rocketThrust * Math.cos(angleRad),
+                fy: rocketThrust * Math.sin(angleRad)
+            };
+        }        function updateRocketPhysics(deltaTime) {
+            if (isPaused) return;
+
+            // Apply slow motion during start screen
+            if (isStartScreen) {
+                deltaTime *= slowMotionFactor;
+            }
+
+            let totalFx = 0;
+            let totalFy = 0;
+            
+            // Calculate gravitational forces from all celestial bodies
+            for (const [, body] of Object.entries(celestialBodies)) {
+                const force = calculateGravitationalForce(body.x, body.y, body.mass);
+                totalFx += force.fx;
+                totalFy += force.fy;
+            }
+            
+            // Add thrust force
+            const thrustForce = calculateThrustForce();
+            totalFx += thrustForce.fx;
+            totalFy += thrustForce.fy;
+            
+            // Consume fuel when thrusting - slower consumption
+            if (rocketThrust > 0 && rocketFuel > 0) {
+                const fuelUsed = FUEL_CONSUMPTION_RATE * deltaTime * (rocketThrust / THRUST_POWER) * 0.5; // Slower fuel consumption
+                rocketFuel -= fuelUsed;
+                if (rocketFuel <= 0) {
+                    rocketFuel = 0;
+                    rocketThrust = 0; // Stop thrust when out of fuel
+                }
+            }
+            
+            // Calculate acceleration and update velocity/position
+            const totalMass = ROCKET_DRY_MASS + (rocketFuel / 100) * FUEL_MASS;
+            const accelerationX = totalFx / totalMass;
+            const accelerationY = totalFy / totalMass;
+            
+            rocketVelocityX += accelerationX * deltaTime;
+            rocketVelocityY += accelerationY * deltaTime;
+            
+            positionX += rocketVelocityX * deltaTime;
+            positionY += rocketVelocityY * deltaTime;
+
+            gameTime += deltaTime;
+        }
+
+        function updateCelestialBodies(deltaTime) {
+            if (isPaused) return;
+            
+            // Apply slow motion during start screen
+            if (isStartScreen) {
+                deltaTime *= slowMotionFactor;
+            }
+            
+            for (const [, body] of Object.entries(celestialBodies)) {
+                if (body.distance && body.period) {
+                    body.angle += (2 * Math.PI / body.period) * deltaTime * TIME_SCALE;
+                    body.x = Math.cos(body.angle) * body.distance;
+                    body.y = Math.sin(body.angle) * body.distance;
+                }
+            }
+            
+            for (const asteroid of asteroids) {
+                asteroid.orbitalAngle += (asteroid.orbitalSpeed / asteroid.distance) * deltaTime * TIME_SCALE * 0.1;
+                asteroid.x = Math.cos(asteroid.orbitalAngle) * asteroid.distance;
+                asteroid.y = Math.sin(asteroid.orbitalAngle) * asteroid.distance;
+            }
+        }        function checkCollisions() {
+            // Check collisions with celestial bodies
+            for (const [name, body] of Object.entries(celestialBodies)) {
+                const distance = calculateDistance(positionX, positionY, body.x, body.y);
+                if (distance < body.radius + 5000) { // 5km safety margin
+                    showCrashModal(`Mission Failed! Crashed into ${name.charAt(0).toUpperCase() + name.slice(1)}!`);
+                    return;
+                }
+            }
+            
+            // Check collisions with asteroids
+            for (const asteroid of asteroids) {
+                const distance = calculateDistance(positionX, positionY, asteroid.x, asteroid.y);
+                if (distance < asteroid.radius + 5000) { // 5km safety margin
+                    showCrashModal('Mission Failed! Hit asteroid!');
+                    return;
+                }
+            }
+        }
+
+        function showCrashModal(message) {
+            document.getElementById('crash-message').textContent = message;
+            document.getElementById('crash-modal').style.display = 'flex';
+            isPaused = true;
+        }        function resetRocket() {
+            rocketThrust = 0;
+            
+            // Make sure celestial bodies are at their current positions
+            for (const [name, body] of Object.entries(celestialBodies)) {
+                if (body.distance && body.period && name !== 'sun') {
+                    body.x = Math.cos(body.angle * Math.PI / 180) * body.distance;
+                    body.y = Math.sin(body.angle * Math.PI / 180) * body.distance;
+                }
+            }
+            
+            // Start the rocket in stable Earth orbit at a safe distance (400km altitude)
+            const earthOrbitRadius = EARTH_RADIUS + 400000; // 400km altitude from Earth surface
+            positionX = celestialBodies.earth.x + earthOrbitRadius; // Position relative to Earth's current location
+            positionY = celestialBodies.earth.y;
+            
+            // Calculate Earth's orbital velocity around the Sun
+            const earthSunDistance = calculateDistance(celestialBodies.earth.x, celestialBodies.earth.y, 0, 0);
+            const earthOrbitalSpeed = Math.sqrt(G * SUN_MASS / earthSunDistance);
+            
+            // Earth's velocity vector (tangent to its orbit around Sun)
+            const earthVelX = -earthOrbitalSpeed * (celestialBodies.earth.y / earthSunDistance);
+            const earthVelY = earthOrbitalSpeed * (celestialBodies.earth.x / earthSunDistance);
+            
+            // Rocket's orbital velocity around Earth for stable circular orbit
+            const rocketOrbitalSpeed = Math.sqrt(G * EARTH_MASS / earthOrbitRadius);
+            
+            // Calculate proper tangent velocity for stable orbit
+            // Rocket position relative to Earth
+            const relativeX = positionX - celestialBodies.earth.x;
+            const relativeY = positionY - celestialBodies.earth.y;
+            const relativeDistance = Math.sqrt(relativeX * relativeX + relativeY * relativeY);
+            
+            // Tangent direction (perpendicular to radius vector)
+            const tangentX = -relativeY / relativeDistance;
+            const tangentY = relativeX / relativeDistance;
+            
+            // Rocket velocity relative to Earth (in tangent direction for stable orbit)
+            const rocketVelX = rocketOrbitalSpeed * tangentX;
+            const rocketVelY = rocketOrbitalSpeed * tangentY;
+            
+            // Total velocity is Earth's orbital velocity plus rocket's orbital velocity around Earth
+            rocketVelocityX = earthVelX + rocketVelX;
+            rocketVelocityY = earthVelY + rocketVelY;
+            
+            angle = Math.atan2(tangentY, tangentX) * 180 / Math.PI; // Point in direction of motion
+            rocketFuel = 100;
+            followRocket = true;
+            isPaused = false;
+            updateFollowButton();
+            camera.zoom = 5e-4; // Zoom in much closer to see rocket better
+            camera.panX = 0;
+            camera.panY = 0;
+            document.getElementById('crash-modal').style.display = 'none';
+            document.getElementById('pausePlay').textContent = 'Pause';
+            gameTime = 0;
+            
+            console.log('Rocket reset at altitude:', (earthOrbitRadius - EARTH_RADIUS) / 1000, 'km');
+            console.log('Orbital speed:', rocketOrbitalSpeed / 1000, 'km/s');
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('pausePlay').textContent = isPaused ? 'Play' : 'Pause';
+        }
+
+        function toggleFollowRocket() {
+            followRocket = !followRocket;
+            updateFollowButton();
+        }
+
+        function updateFollowButton() {
+            document.getElementById('followToggle').textContent = `Follow: ${followRocket ? 'ON' : 'OFF'}`;
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const camera = {
+            x: positionX,
+            y: positionY,
+            zoom: 1e-4,
+            panX: 0,
+            panY: 0,
+            minZoom: 1e-7,
+            maxZoom: 5e-4
+        };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        function worldToScreen(worldX, worldY) {
+            const screenX = (worldX - camera.x + camera.panX) * camera.zoom + canvas.width / 2;
+            const screenY = (worldY - camera.y + camera.panY) * camera.zoom + canvas.height / 2;
+            return { x: screenX, y: screenY };
+        }        function drawStars() {
+            ctx.save();
+            for (const star of stars) {
+                const screenPos = worldToScreen(star.x, star.y);
+                if (screenPos.x > -10 && screenPos.x < canvas.width + 10 &&
+                    screenPos.y > -10 && screenPos.y < canvas.height + 10) {
+                    ctx.globalAlpha = star.brightness;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(screenPos.x - star.size/2, screenPos.y - star.size/2, star.size, star.size);
+                }
+            }
+            ctx.restore();
+        }
+
+        function drawCelestialBody(body, name) {
+            const screenPos = worldToScreen(body.x, body.y);
+            const screenRadius = Math.max(3, body.radius * camera.zoom);
+            
+            if (screenPos.x > -screenRadius * 3 && screenPos.x < canvas.width + screenRadius * 3 &&
+                screenPos.y > -screenRadius * 3 && screenPos.y < canvas.height + screenRadius * 3) {
+                
+                if (body.glow) {
+                    const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, screenRadius * 3);
+                    gradient.addColorStop(0, body.color);
+                    gradient.addColorStop(0.5, body.color + '44');
+                    gradient.addColorStop(1, 'transparent');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(screenPos.x, screenPos.y, screenRadius * 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = body.color;
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                if (body.hasRings && screenRadius > 5) {
+                    ctx.strokeStyle = '#aaaaaa';
+                    ctx.lineWidth = Math.max(1, screenRadius * 0.05);
+                    ctx.beginPath();
+                    ctx.arc(screenPos.x, screenPos.y, screenRadius * 1.8, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(screenPos.x, screenPos.y, screenRadius * 2.2, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                if (screenRadius > 5) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = `${Math.max(10, screenRadius * 0.3)}px Courier New`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(name.charAt(0).toUpperCase() + name.slice(1), screenPos.x, screenPos.y - screenRadius - 15);
+                }
+            }
+        }
+
+        function drawAsteroid(asteroid) {
+            const screenPos = worldToScreen(asteroid.x, asteroid.y);
+            const screenRadius = Math.max(1, asteroid.radius * camera.zoom);
+            
+            if (screenPos.x > -screenRadius && screenPos.x < canvas.width + screenRadius &&
+                screenPos.y > -screenRadius && screenPos.y < canvas.height + screenRadius) {
+                
+                ctx.fillStyle = '#777777';
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                if (screenRadius > 3) {
+                    ctx.fillStyle = '#999999';
+                    ctx.fillRect(screenPos.x - screenRadius*0.3, screenPos.y - screenRadius*0.3, 
+                               screenRadius*0.6, screenRadius*0.6);
+                }
+            }
+        }
+
+        function drawRocket() {
+            const screenPos = worldToScreen(positionX, positionY);
+            const size = Math.max(8, 15 * Math.sqrt(camera.zoom * 50000));
+            
+            ctx.save();
+            ctx.translate(screenPos.x, screenPos.y);
+            ctx.rotate(angle * Math.PI / 180);
+            
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            ctx.moveTo(size, 0);
+            ctx.lineTo(-size * 0.6, size * 0.4);
+            ctx.lineTo(-size * 0.6, -size * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = Math.max(1, size * 0.1);
+            ctx.stroke();
+            
+            if (rocketThrust > 0) {
+                const flameLength = (rocketThrust / THRUST_POWER) * size * 2;
+                ctx.fillStyle = '#ff8800';
+                ctx.beginPath();
+                ctx.moveTo(-size * 0.6, size * 0.3);
+                ctx.lineTo(-size * 0.6 - flameLength, 0);
+                ctx.lineTo(-size * 0.6, -size * 0.3);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.moveTo(-size * 0.6, size * 0.15);
+                ctx.lineTo(-size * 0.6 - flameLength * 0.7, 0);
+                ctx.lineTo(-size * 0.6, -size * 0.15);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+
+        function drawVelocityVector() {
+            const screenPos = worldToScreen(positionX, positionY);
+            const speed = Math.sqrt(rocketVelocityX * rocketVelocityX + rocketVelocityY * rocketVelocityY);
+            
+            if (speed > 0) {
+                const scale = Math.min(100, speed / 200);
+                const endX = screenPos.x + (rocketVelocityX / speed) * scale;
+                const endY = screenPos.y + (rocketVelocityY / speed) * scale;
+                
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(screenPos.x, screenPos.y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                const angle = Math.atan2(endY - screenPos.y, endX - screenPos.x);
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - 6 * Math.cos(angle - 0.5), endY - 6 * Math.sin(angle - 0.5));
+                ctx.lineTo(endX - 6 * Math.cos(angle + 0.5), endY - 6 * Math.sin(angle + 0.5));
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function updateCamera() {
+            if (followRocket && !isStartScreen) {
+                camera.x = positionX;
+                camera.y = positionY;
+            }
+        }        function updateUI() {
+            const speed = Math.sqrt(rocketVelocityX * rocketVelocityX + rocketVelocityY * rocketVelocityY) / 1000;
+            const speedEl = document.getElementById('speed');
+            speedEl.textContent = `${speed.toFixed(1)} km/s`;
+            
+            if (speed < 5) {
+                speedEl.className = 'warning';
+            } else if (speed < 12) {
+                speedEl.className = 'good';
+            } else {
+                speedEl.className = 'caution';
+            }
+            
+            // Find nearest celestial body
+            let nearestBody = 'sun';
+            let nearestDistance = calculateDistance(positionX, positionY, 0, 0);
+            for (const [name, body] of Object.entries(celestialBodies)) {
+                const distance = calculateDistance(positionX, positionY, body.x, body.y);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestBody = name;
+                }
+            }
+            
+            document.getElementById('nearest').textContent = nearestBody.charAt(0).toUpperCase() + nearestBody.slice(1);
+            
+            // Calculate altitude properly
+            if (nearestBody === 'earth') {
+                const altitude = (nearestDistance - EARTH_RADIUS) / 1000;
+                document.getElementById('altitude').textContent = `${altitude.toFixed(0)} km`;
+            } else {
+                document.getElementById('altitude').textContent = `${(nearestDistance / 1000).toFixed(0)} km`;
+            }
+            
+            // Calculate total acceleration (G-force) from all forces
+            let totalFx = 0;
+            let totalFy = 0;
+            
+            // Add gravitational forces from all bodies
+            for (const [, body] of Object.entries(celestialBodies)) {
+                const force = calculateGravitationalForce(body.x, body.y, body.mass);
+                totalFx += force.fx;
+                totalFy += force.fy;
+            }
+            
+            // Add thrust force
+            const thrustForce = calculateThrustForce();
+            totalFx += thrustForce.fx;
+            totalFy += thrustForce.fy;
+            
+            // Calculate total acceleration
+            const totalMass = ROCKET_DRY_MASS + (rocketFuel / 100) * FUEL_MASS;
+            const totalAcceleration = Math.sqrt(totalFx * totalFx + totalFy * totalFy) / totalMass;
+            const gForce = totalAcceleration / 9.81;
+            
+            document.getElementById('gforce').textContent = `${gForce.toFixed(1)} G`;
+            
+            // Update fuel display
+            document.getElementById('fuel-percent').textContent = `${Math.round(rocketFuel)}%`;
+            const fuelFill = document.getElementById('fuel-fill');
+            fuelFill.style.width = `${rocketFuel}%`;
+            
+            if (rocketFuel < 20) {
+                fuelFill.style.backgroundColor = '#ff4444';
+            } else if (rocketFuel < 50) {
+                fuelFill.style.backgroundColor = '#ffff44';
+            } else {
+                fuelFill.style.backgroundColor = '#00ff00';
+            }
+        }
+
+        function gameLoop(currentTime) {
+            const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
+            lastTime = currentTime;
+            
+            updateRocketPhysics(deltaTime);
+            updateCelestialBodies(deltaTime);
+            checkCollisions();
+            
+            updateCamera();
+            
+            ctx.fillStyle = '#000011';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            drawStars();
+            
+            for (const [name, body] of Object.entries(celestialBodies)) {
+                drawCelestialBody(body, name);
+            }
+            
+            for (const asteroid of asteroids) {
+                drawAsteroid(asteroid);
+            }
+            
+            drawRocket();
+            drawVelocityVector();
+            
+            updateUI();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePause();
+            } else if (e.code === 'KeyF') {
+                e.preventDefault();
+                toggleFollowRocket();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });        function handleInput() {
+            if (isPaused || isStartScreen) return; // Disable input during start screen
+            
+            // Thrust control - gradual buildup for better control
+            if (keys['ArrowUp'] && rocketFuel > 0) {
+                rocketThrust = Math.min(rocketThrust + THRUST_POWER * 0.1, THRUST_POWER);
+                document.getElementById('thrustUp').classList.add('active');
+            } else {
+                rocketThrust = Math.max(rocketThrust - THRUST_POWER * 0.2, 0);
+                document.getElementById('thrustUp').classList.remove('active');
+            }
+            
+            // Rotation control - more responsive
+            if (keys['ArrowLeft']) {
+                angle -= 3;
+                document.getElementById('rotateLeft').classList.add('active');
+            } else {
+                document.getElementById('rotateLeft').classList.remove('active');
+            }
+            
+            if (keys['ArrowRight']) {
+                angle += 3;
+                document.getElementById('rotateRight').classList.add('active');
+            } else {
+                document.getElementById('rotateRight').classList.remove('active');
+            }
+            
+            // Normalize angle
+            if (angle < 0) angle += 360;
+            if (angle >= 360) angle -= 360;
+        }
+
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            followRocket = false;
+            updateFollowButton();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+            
+            camera.panX += deltaX / camera.zoom;
+            camera.panY += deltaY / camera.zoom;
+            
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, camera.zoom * zoomFactor));
+        });
+
+        document.getElementById('resetRocket').addEventListener('click', resetRocket);
+        document.getElementById('pausePlay').addEventListener('click', togglePause);
+        document.getElementById('followToggle').addEventListener('click', toggleFollowRocket);
+
+        document.getElementById('zoomIn').addEventListener('click', () => {
+            camera.zoom = Math.min(camera.maxZoom, camera.zoom * 1.5);
+        });
+
+        document.getElementById('zoomOut').addEventListener('click', () => {
+            camera.zoom = Math.max(camera.minZoom, camera.zoom * 0.67);
+        });
+
+        document.getElementById('resetZoom').addEventListener('click', () => {
+            camera.zoom = 1e-4;
+            camera.panX = 0;
+            camera.panY = 0;
+            followRocket = true;
+            updateFollowButton();
+        });
+
+        document.getElementById('restart-btn').addEventListener('click', resetRocket);
+
+        // Start screen functionality
+        document.getElementById('start-mission-btn').addEventListener('click', () => {
+            const startScreen = document.getElementById('start-screen');
+            isStartScreen = false;
+            
+            // Hide start screen with fade out
+            startScreen.style.opacity = '0';
+            startScreen.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                startScreen.style.display = 'none';
+            }, 500);
+            
+            // Animate zoom in to rocket over 3 seconds
+            const animationDuration = 3000; // 3 seconds
+            const startTime = Date.now();
+            const startZoom = camera.zoom;
+            const targetZoom = 5e-4; // Final zoom level for gameplay
+            const startX = camera.x;
+            const startY = camera.y;
+            
+            function animateZoomToRocket() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / animationDuration, 1);
+                
+                // Smooth easing function
+                const easeInOut = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                const easedProgress = easeInOut(progress);
+                
+                // Interpolate zoom and position
+                camera.zoom = startZoom + (targetZoom - startZoom) * easedProgress;
+                camera.x = (1 - easedProgress) * startX + easedProgress * positionX;
+                camera.y = (1 - easedProgress) * startY + easedProgress * positionY;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateZoomToRocket);
+                } else {
+                    // Animation complete - enable rocket following and full speed
+                    followRocket = true;
+                    updateFollowButton();
+                    slowMotionFactor = 1.0; // Return to normal speed
+                    
+                    // Show UI after zoom animation completes
+                    document.getElementById('ui').classList.remove('hidden');
+                    document.getElementById('instructions').classList.remove('hidden');
+                }
+            }
+            
+            animateZoomToRocket();
+        });
+
+        function init() {
+            resizeCanvas();
+            generateStars();
+            generateAsteroids();
+            
+            // Initialize celestial body positions
+            for (const [, body] of Object.entries(celestialBodies)) {
+                if (body.distance && body.period) {
+                    body.x = Math.cos(body.angle * Math.PI / 180) * body.distance;
+                    body.y = Math.sin(body.angle * Math.PI / 180) * body.distance;
+                }
+            }
+            
+            // Initialize rocket in proper Earth orbit BEFORE setting camera
+            resetRocket();
+            
+            // Set initial camera for start screen - zoomed out to show solar system
+            camera.zoom = 2e-8; // Very far out to see whole solar system
+            camera.x = 0; // Center on solar system
+            camera.y = 0;
+            followRocket = false;
+            
+            // Hide UI during start screen
+            document.getElementById('ui').classList.add('hidden');
+            document.getElementById('instructions').classList.add('hidden');
+            
+            // Show start screen initially
+            document.getElementById('start-screen').style.display = 'block';
+            document.getElementById('start-screen').style.opacity = '1';
+            
+            // Log rocket initial state for debugging
+            console.log('Initial rocket position:', positionX, positionY);
+            console.log('Initial rocket velocity:', rocketVelocityX, rocketVelocityY);
+            console.log('Earth position:', celestialBodies.earth.x, celestialBodies.earth.y);
+            
+            requestAnimationFrame((time) => {
+                lastTime = time;
+                gameLoop(time);
+            });
+            
+            setInterval(handleInput, 16);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
         
-        <h3>Basic Controls</h3>
-        <ul>
-            <li><strong>W</strong> - Fire main engine (thrust forward)</li>
-            <li><strong>A</strong> - Rotate spacecraft left</li>
-            <li><strong>D</strong> - Rotate spacecraft right</li>
-            <li><strong>SPACE</strong> - Pause/Resume simulation</li>
-        </ul>
-        
-        <h3>Physics Concepts</h3>
-        <p>As you navigate space, pay attention to these key physics concepts:</p>
-        <ul>
-            <li><strong>Inertia</strong>: Objects in motion stay in motion unless acted upon by an external force</li>
-            <li><strong>Orbital Mechanics</strong>: Balance between gravity and velocity creates stable orbits</li>
-            <li><strong>Conservation of Momentum</strong>: Your thrust affects your trajectory in predictable ways</li>
-            <li><strong>Universal Gravitation</strong>: Gravitational force decreases with the square of distance</li>
-        </ul>
-        
-        <h3>Simulation Features</h3>
-        <ul>
-            <li><strong>Predicted Path</strong>: When paused, a dotted yellow line shows your projected trajectory</li>
-            <li><strong>Thrust Trail</strong>: Your engine exhaust creates a visible trail showing your path</li>
-            <li><strong>Distance Display</strong>: Shows your distance to the nearest celestial body</li>
-        </ul>
-        
-        <p>Ready to begin? Click "Start Simulation" to launch your spacecraft!</p>
-    </div>
-
-    <!-- Configuration -->
-    <script src="js/config.js" defer></script>
-
-    <!-- Core Modules -->
-    <script src="js/physics.js" defer></script>
-    <script src="js/spacecraft.js" defer></script>
-    <script src="js/renderer.js" defer></script>
-    <script src="js/NasaApiService.js" defer></script> <!-- Load if needed -->
-    <script src="js/nasaApi.js" defer></script> <!-- Load if needed -->
-    <script src="js/simulation.js" defer></script>
-
-    <!-- Main Application Logic -->
-    <script src="js/app.js" defer></script>
-
-    <!-- Debug Panel Logic -->
-    <script src="js/debug.js" defer></script>
+        init();
+    </script>
 </body>
 </html>
