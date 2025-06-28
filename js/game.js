@@ -1,6 +1,9 @@
 const G = 6.67430e-11;
 const TIME_SCALE = 100;
 
+// Astronomical Unit in meters
+const AU = 1.496e11; // 1 AU = 149,600,000 km
+
 // Celestial body constants
 const SUN_RADIUS = 6.9634e8;
 const SUN_MASS = 1.989e30;
@@ -56,7 +59,7 @@ function generateStars() {
     }
 }
 
-// Celestial bodies with orbital mechanics
+// Celestial bodies with orbital mechanics (distances in AU for clarity)
 const celestialBodies = {
     sun: { 
         x: 0, y: 0, 
@@ -66,79 +69,101 @@ const celestialBodies = {
         glow: true
     },
     mercury: { 
-        x: 5.79e10, y: 0, 
+        x: 0.387 * AU, y: 0, 
         mass: MERCURY_MASS, 
         radius: MERCURY_RADIUS,
-        distance: 5.79e10, 
+        distance: 0.387 * AU, 
         period: 88 * 24 * 3600,
         angle: 0,
         color: '#8c7853'
     },
     venus: { 
-        x: 1.08e11, y: 0, 
+        x: 0.723 * AU, y: 0, 
         mass: VENUS_MASS, 
         radius: VENUS_RADIUS,
-        distance: 1.08e11, 
+        distance: 0.723 * AU, 
         period: 225 * 24 * 3600,
         angle: 45,
         color: '#ffc649'
     },
     earth: { 
-        x: 1.496e11, y: 0, 
+        x: 1 * AU, y: 0, 
         mass: EARTH_MASS, 
         radius: EARTH_RADIUS,
-        distance: 1.496e11, 
+        distance: 1 * AU, 
         period: 365 * 24 * 3600,
         angle: 90,
         color: '#6b93d6'
     },
     mars: { 
-        x: 2.279e11, y: 0, 
+        x: 1.524 * AU, y: 0, 
         mass: MARS_MASS, 
         radius: MARS_RADIUS,
-        distance: 2.279e11, 
+        distance: 1.524 * AU, 
         period: 687 * 24 * 3600,
         angle: 135,
         color: '#cd5c5c'
     },
     jupiter: { 
-        x: 7.786e11, y: 0, 
+        x: 5.203 * AU, y: 0, 
         mass: JUPITER_MASS, 
         radius: JUPITER_RADIUS,
-        distance: 7.786e11, 
+        distance: 5.203 * AU, 
         period: 4333 * 24 * 3600,
         angle: 180,
         color: '#d2691e'
     },
     saturn: { 
-        x: 1.432e12, y: 0, 
+        x: 9.537 * AU, y: 0, 
         mass: SATURN_MASS, 
         radius: SATURN_RADIUS,
-        distance: 1.432e12, 
+        distance: 9.537 * AU, 
         period: 10759 * 24 * 3600,
         angle: 225,
         color: '#fad5a5',
         hasRings: true
     },
     uranus: { 
-        x: 2.867e12, y: 0, 
+        x: 19.191 * AU, y: 0, 
         mass: URANUS_MASS, 
         radius: URANUS_RADIUS,
-        distance: 2.867e12, 
+        distance: 19.191 * AU, 
         period: 30687 * 24 * 3600,
         angle: 270,
         color: '#4fd0e7'
     },
     neptune: { 
-        x: 4.515e12, y: 0, 
+        x: 30.07 * AU, y: 0, 
         mass: NEPTUNE_MASS, 
         radius: NEPTUNE_RADIUS,
-        distance: 4.515e12, 
+        distance: 30.07 * AU, 
         period: 60190 * 24 * 3600,
         angle: 315,
         color: '#4b70dd'
     }
 };
+
+// After celestialBodies definition, ensure no overlap between planets
+(function ensureNoPlanetOverlap() {
+    const planetOrder = [
+        'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'
+    ];
+    const sun = celestialBodies.sun;
+    let prevBody = sun;
+    let prevDistance = 0;
+    const padding = 2.5e7; // 25,000,000 meters padding between planets (adjust as needed)
+
+    for (const name of planetOrder) {
+        const body = celestialBodies[name];
+        // Minimum required distance from previous body (center to center)
+        const minDistance = prevDistance + prevBody.radius + body.radius + padding;
+        // Use the greater of AU-based distance or non-overlapping distance
+        body.distance = Math.max(body.distance, minDistance);
+        body.x = body.distance;
+        prevBody = body;
+        prevDistance = body.distance;
+    }
+})();
 
 // Generate asteroids in the asteroid belt
 const asteroids = [];

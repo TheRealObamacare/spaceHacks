@@ -334,6 +334,7 @@
     </div>
 
     <script>
+        const stars = [];
         const G = 6.67430e-11;
         const TIME_SCALE = 100;
 
@@ -373,14 +374,19 @@
         let keys = {};
         let lastTime = 0;
         let isStartScreen = true;
-        let slowMotionFactor = 0.15; // For start screen slow motion - more visible effect        const stars = [];
+        let slowMotionFactor = 0.15; // For start screen slow motion - more visible effect
+
+        // Add a global scale factor for planet distances
+        const DISTANCE_SCALE = 1e-8; // Shrink distances by 100 million times
+
         function generateStars() {
-            for (let i = 0; i < 3000; i++) {
+            stars.length = 0; // Clear existing stars if regenerating
+            for (let i = 0; i < 2500; i++) {
                 stars.push({
-                    x: (Math.random() - 0.5) * 2e13,
-                    y: (Math.random() - 0.5) * 2e13,
-                    brightness: Math.random() * 0.8 + 0.2,
-                    size: Math.random() * 2.0 + 0.5
+                    x: (Math.random() - 0.5) * 4e13, // Much larger spread for stars
+                    y: (Math.random() - 0.5) * 4e13,
+                    brightness: Math.random() * 0.7 + 0.3,
+                    size: Math.random() * 1.5 + 0.5
                 });
             }
         }
@@ -389,59 +395,59 @@
             sun: { 
                 x: 0, y: 0, 
                 mass: SUN_MASS, 
-                radius: SUN_RADIUS,
+                radius: 30,
                 color: '#ffff00',
                 glow: true
             },
             mercury: { 
-                x: 5.79e10, y: 0, 
+                x: 60, y: 0, 
                 mass: MERCURY_MASS, 
-                radius: MERCURY_RADIUS,
+                radius: 4,
                 distance: 5.79e10, 
                 period: 88 * 24 * 3600,
                 angle: 0,
                 color: '#8c7853'
             },
             venus: { 
-                x: 1.08e11, y: 0, 
+                x: 120, y: 0, 
                 mass: VENUS_MASS, 
-                radius: VENUS_RADIUS,
+                radius: 8,
                 distance: 1.08e11, 
                 period: 225 * 24 * 3600,
                 angle: 45,
                 color: '#ffc649'
             },
             earth: { 
-                x: 1.496e11, y: 0, 
+                x: 200, y: 0, 
                 mass: EARTH_MASS, 
-                radius: EARTH_RADIUS,
+                radius: 8,
                 distance: 1.496e11, 
                 period: 365 * 24 * 3600,
                 angle: 90,
                 color: '#6b93d6'
             },
             mars: { 
-                x: 2.279e11, y: 0, 
+                x: 300, y: 0, 
                 mass: MARS_MASS, 
-                radius: MARS_RADIUS,
+                radius: 6,
                 distance: 2.279e11, 
                 period: 687 * 24 * 3600,
                 angle: 135,
                 color: '#cd5c5c'
             },
             jupiter: { 
-                x: 7.786e11, y: 0, 
+                x: 400, y: 0, 
                 mass: JUPITER_MASS, 
-                radius: JUPITER_RADIUS,
+                radius: 18,
                 distance: 7.786e11, 
                 period: 4333 * 24 * 3600,
                 angle: 180,
                 color: '#d2691e'
             },
             saturn: { 
-                x: 1.432e12, y: 0, 
+                x: 500, y: 0, 
                 mass: SATURN_MASS, 
-                radius: SATURN_RADIUS,
+                radius: 16,
                 distance: 1.432e12, 
                 period: 10759 * 24 * 3600,
                 angle: 225,
@@ -449,44 +455,83 @@
                 hasRings: true
             },
             uranus: { 
-                x: 2.867e12, y: 0, 
+                x: 600, y: 0, 
                 mass: URANUS_MASS, 
-                radius: URANUS_RADIUS,
+                radius: 12,
                 distance: 2.867e12, 
                 period: 30687 * 24 * 3600,
                 angle: 270,
                 color: '#4fd0e7'
             },
             neptune: { 
-                x: 4.515e12, y: 0, 
+                x: 700, y: 0, 
                 mass: NEPTUNE_MASS, 
-                radius: NEPTUNE_RADIUS,
+                radius: 12,
                 distance: 4.515e12, 
                 period: 60190 * 24 * 3600,
                 angle: 315,
                 color: '#4b70dd'
             }
-        };        const asteroids = [];
+        };
+
+        // When initializing celestialBodies, multiply all 'distance' values by DISTANCE_SCALE
+        // (Do this after celestialBodies is defined, before any position calculations)
+        for (const key in celestialBodies) {
+            if (celestialBodies[key].distance) {
+                celestialBodies[key].distance *= DISTANCE_SCALE;
+            }
+        }
+
+        // After celestialBodies definition, set static positions:
+        celestialBodies.sun.x = 0;
+        celestialBodies.sun.y = 0;
+        celestialBodies.mercury.x = 60;
+        celestialBodies.mercury.y = 0;
+        celestialBodies.venus.x = 120;
+        celestialBodies.venus.y = 0;
+        celestialBodies.earth.x = 200;
+        celestialBodies.earth.y = 0;
+        celestialBodies.mars.x = 300;
+        celestialBodies.mars.y = 0;
+        celestialBodies.jupiter.x = 400;
+        celestialBodies.jupiter.y = 0;
+        celestialBodies.saturn.x = 500;
+        celestialBodies.saturn.y = 0;
+        celestialBodies.uranus.x = 600;
+        celestialBodies.uranus.y = 0;
+        celestialBodies.neptune.x = 700;
+        celestialBodies.neptune.y = 0;
+        // Set rocket spawn point relative to Earth
+        positionX = celestialBodies.earth.x + 20;
+        positionY = celestialBodies.earth.y;
+
+        const asteroids = [];
         function generateAsteroids() {
-            // More dense asteroid belt between Mars and Jupiter
-            const minDistance = 2.2e11; // Closer to Mars
-            const maxDistance = 3.5e11; // Closer to Jupiter
-            const numAsteroids = 500; // More asteroids
+            asteroids.length = 0; // Clear existing asteroids
+            const minDistance = 3.0e11; // Adjusted: Inner edge of asteroid belt (after Mars)
+            const maxDistance = 5.0e11; // Adjusted: Outer edge of asteroid belt (before Jupiter)
+            const numAsteroids = 200;   // Reduced number for clarity
             
             for (let i = 0; i < numAsteroids; i++) {
                 const distance = minDistance + Math.random() * (maxDistance - minDistance);
                 const angle = Math.random() * Math.PI * 2;
-                const size = 2000 + Math.random() * 8000; // Smaller asteroids
+                // Adjusted: Smaller radii for asteroids (0.5km to 2km)
+                const radius = 500 + Math.random() * 1500; 
                 
+                // Assign a random grey color variation
+                const baseGrey = 80 + Math.random() * 40; // Random base grey between 80 and 120
+                const color = `rgb(${baseGrey}, ${baseGrey}, ${baseGrey})`;
+
                 asteroids.push({
                     x: Math.cos(angle) * distance,
                     y: Math.sin(angle) * distance,
-                    radius: size,
-                    mass: size * size * size * 2000,
+                    radius: radius, // World unit radius
+                    mass: radius * radius * radius * 1500, // Adjusted density factor if needed
                     orbitalSpeed: Math.sqrt(G * SUN_MASS / distance),
                     orbitalAngle: angle,
                     distance: distance,
-                    rotationSpeed: (Math.random() - 0.5) * 0.1
+                    rotationSpeed: (Math.random() - 0.5) * 0.1,
+                    color: color // Store the color
                 });
             }
         }
@@ -579,8 +624,9 @@
             for (const [, body] of Object.entries(celestialBodies)) {
                 if (body.distance && body.period) {
                     body.angle += (2 * Math.PI / body.period) * deltaTime * TIME_SCALE;
-                    body.x = Math.cos(body.angle) * body.distance;
-                    body.y = Math.sin(body.angle) * body.distance;
+                    const angleRad = body.angle * Math.PI / 180;
+                    body.x = Math.cos(angleRad) * body.distance;
+                    body.y = Math.sin(angleRad) * body.distance;
                 }
             }
             
@@ -691,19 +737,26 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
+        if (!canvas || !ctx) {
+            console.error('Failed to initialize canvas or 2D context');
+        } else {
+            console.log('Canvas and context initialized successfully');
+        }
+
         const camera = {
             x: positionX,
             y: positionY,
-            zoom: 1e-4,
+            zoom: 0.7, // Default, will be overridden by init() or resetRocket()
             panX: 0,
             panY: 0,
-            minZoom: 1e-7,
+            minZoom: 1e-15, // Much smaller min zoom to allow seeing the entire solar system
             maxZoom: 5e-4
         };
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
         }
 
         function worldToScreen(worldX, worldY) {
@@ -712,25 +765,50 @@
             return { x: screenX, y: screenY };
         }        function drawStars() {
             ctx.save();
+            ctx.fillStyle = '#ffffff'; // Stars are white
+            let starsDrawn = 0;
             for (const star of stars) {
                 const screenPos = worldToScreen(star.x, star.y);
-                if (screenPos.x > -10 && screenPos.x < canvas.width + 10 &&
-                    screenPos.y > -10 && screenPos.y < canvas.height + 10) {
-                    ctx.globalAlpha = star.brightness;
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(screenPos.x - star.size/2, screenPos.y - star.size/2, star.size, star.size);
+
+                // Basic culling: only draw if near viewport
+                if (screenPos.x < -5 || screenPos.x > canvas.width + 5 ||
+                    screenPos.y < -5 || screenPos.y > canvas.height + 5) {
+                    continue;
                 }
+
+                ctx.globalAlpha = star.brightness;
+                
+                // Draw small circles for stars. star.size is intended as pixel diameter.
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, star.size / 2, 0, Math.PI * 2);
+                ctx.fill();
+                starsDrawn++;
             }
+            
+            if (gameTime < 1) {
+                console.log(`Drew ${starsDrawn} stars out of ${stars.length} total`);
+            }
+            
+            ctx.globalAlpha = 1.0; // Reset globalAlpha
             ctx.restore();
         }
 
         function drawCelestialBody(body, name) {
             const screenPos = worldToScreen(body.x, body.y);
-            const screenRadius = Math.max(3, body.radius * camera.zoom);
-            
+            // Make planets and sun much smaller during start screen preview
+            let baseRadius;
+            if (isStartScreen) {
+                baseRadius = body.radius * 100; // Much smaller for preview
+            } else {
+                baseRadius = body.radius * 10000; // Normal size for simulation
+            }
+            const screenRadius = Math.max(2, baseRadius * camera.zoom);
+
+            // Debug logging for every frame
+            console.log(`Drawing ${name}: world(${body.x.toExponential(2)}, ${body.y.toExponential(2)}) -> screen(${screenPos.x.toFixed(1)}, ${screenPos.y.toFixed(1)}), radius: ${screenRadius.toFixed(1)}`);
+
             if (screenPos.x > -screenRadius * 3 && screenPos.x < canvas.width + screenRadius * 3 &&
                 screenPos.y > -screenRadius * 3 && screenPos.y < canvas.height + screenRadius * 3) {
-                
                 if (body.glow) {
                     const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, screenRadius * 3);
                     gradient.addColorStop(0, body.color);
@@ -741,12 +819,10 @@
                     ctx.arc(screenPos.x, screenPos.y, screenRadius * 3, 0, Math.PI * 2);
                     ctx.fill();
                 }
-                
                 ctx.fillStyle = body.color;
                 ctx.beginPath();
                 ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
                 ctx.fill();
-                
                 if (body.hasRings && screenRadius > 5) {
                     ctx.strokeStyle = '#aaaaaa';
                     ctx.lineWidth = Math.max(1, screenRadius * 0.05);
@@ -757,39 +833,53 @@
                     ctx.arc(screenPos.x, screenPos.y, screenRadius * 2.2, 0, Math.PI * 2);
                     ctx.stroke();
                 }
-                
                 if (screenRadius > 5) {
                     ctx.fillStyle = '#ffffff';
                     ctx.font = `${Math.max(10, screenRadius * 0.3)}px Courier New`;
                     ctx.textAlign = 'center';
                     ctx.fillText(name.charAt(0).toUpperCase() + name.slice(1), screenPos.x, screenPos.y - screenRadius - 15);
                 }
+            } else {
+                console.log(`${name} is outside viewport bounds`);
             }
         }
 
         function drawAsteroid(asteroid) {
             const screenPos = worldToScreen(asteroid.x, asteroid.y);
-            const screenRadius = Math.max(1, asteroid.radius * camera.zoom);
+            // Make asteroids more visible during start screen
+            let baseRadius = asteroid.radius * 300;
+            if (isStartScreen) {
+                baseRadius = asteroid.radius * 100; // 100x larger during start screen
+            }
+            const screenRadius = Math.max(0.5, baseRadius * camera.zoom); 
             
-            if (screenPos.x > -screenRadius && screenPos.x < canvas.width + screenRadius &&
-                screenPos.y > -screenRadius && screenPos.y < canvas.height + screenRadius) {
+            // Culling - expanded slightly to catch asteroids just off screen if they are large
+            if (screenPos.x > -screenRadius - 5 && screenPos.x < canvas.width + screenRadius + 5 &&
+                screenPos.y > -screenRadius - 5 && screenPos.y < canvas.height + screenRadius + 5) {
                 
-                ctx.fillStyle = '#777777';
+                ctx.fillStyle = asteroid.color; // Use the pre-calculated color
                 ctx.beginPath();
                 ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
                 ctx.fill();
                 
-                if (screenRadius > 3) {
-                    ctx.fillStyle = '#999999';
-                    ctx.fillRect(screenPos.x - screenRadius*0.3, screenPos.y - screenRadius*0.3, 
-                               screenRadius*0.6, screenRadius*0.6);
+                // Keep simple detail for performance, only if reasonably large on screen
+                if (screenRadius > 2) { 
+                    const baseGreyValue = parseInt(asteroid.color.substring(asteroid.color.indexOf('(') + 1, asteroid.color.indexOf(',')));
+                    const detailBrightness = Math.min(255, baseGreyValue + 30); // A bit brighter for detail
+                    ctx.fillStyle = `rgb(${detailBrightness},${detailBrightness},${detailBrightness})`;
+                    // Draw a smaller, slightly offset circle for a bit of texture
+                    ctx.beginPath();
+                    ctx.arc(screenPos.x + screenRadius * 0.2, screenPos.y - screenRadius * 0.2, screenRadius * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
         }
 
         function drawRocket() {
             const screenPos = worldToScreen(positionX, positionY);
-            const size = Math.max(8, 15 * Math.sqrt(camera.zoom * 50000));
+            // Make rocket more visible during start screen by using a larger size
+            const baseSize = isStartScreen ? 60 : 15;
+            const size = Math.max(8, baseSize * Math.sqrt(camera.zoom * 50000));
             
             ctx.save();
             ctx.translate(screenPos.x, screenPos.y);
@@ -933,8 +1023,14 @@
         }
 
         function gameLoop(currentTime) {
+            if (!currentTime) currentTime = performance.now();
             const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
             lastTime = currentTime;
+            
+            // Debug logging for first few frames
+            if (gameTime < 1) {
+                console.log(`Frame: time=${gameTime.toFixed(2)}, camera zoom=${camera.zoom.toExponential(2)}, camera pos=(${camera.x.toExponential(2)}, ${camera.y.toExponential(2)})`);
+            }
             
             updateRocketPhysics(deltaTime);
             updateCelestialBodies(deltaTime);
@@ -942,13 +1038,21 @@
             
             updateCamera();
             
+            // Clear canvas with dark space color
             ctx.fillStyle = '#000011';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
+            // Draw everything
             drawStars();
             
+            let planetsDrawn = 0;
             for (const [name, body] of Object.entries(celestialBodies)) {
                 drawCelestialBody(body, name);
+                planetsDrawn++;
+            }
+            
+            if (gameTime < 1) {
+                console.log(`Drew ${planetsDrawn} celestial bodies, ${asteroids.length} asteroids available`);
             }
             
             for (const asteroid of asteroids) {
@@ -1067,77 +1171,114 @@
 
         document.getElementById('restart-btn').addEventListener('click', resetRocket);
 
-        // Start screen functionality
-        document.getElementById('start-mission-btn').addEventListener('click', () => {
-            const startScreen = document.getElementById('start-screen');
-            isStartScreen = false;
-            
-            // Hide start screen with fade out
-            startScreen.style.opacity = '0';
-            startScreen.style.transition = 'opacity 0.5s ease';
-            setTimeout(() => {
-                startScreen.style.display = 'none';
-            }, 500);
-            
-            // Animate zoom in to rocket over 3 seconds
-            const animationDuration = 3000; // 3 seconds
-            const startTime = Date.now();
-            const startZoom = camera.zoom;
-            const targetZoom = 5e-4; // Final zoom level for gameplay
-            const startX = camera.x;
-            const startY = camera.y;
-            
-            function animateZoomToRocket() {
-                const elapsed = Date.now() - startTime;
-                const progress = Math.min(elapsed / animationDuration, 1);
-                
-                // Smooth easing function
-                const easeInOut = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-                const easedProgress = easeInOut(progress);
-                
-                // Interpolate zoom and position
-                camera.zoom = startZoom + (targetZoom - startZoom) * easedProgress;
-                camera.x = (1 - easedProgress) * startX + easedProgress * positionX;
-                camera.y = (1 - easedProgress) * startY + easedProgress * positionY;
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animateZoomToRocket);
-                } else {
-                    // Animation complete - enable rocket following and full speed
-                    followRocket = true;
-                    updateFollowButton();
-                    slowMotionFactor = 1.0; // Return to normal speed
+        // Start screen functionality - setup the button event listener
+        document.addEventListener('DOMContentLoaded', () => {
+            const startButton = document.getElementById('start-mission-btn');
+            if (startButton) {
+                console.log('Setting up start button');
+                startButton.addEventListener('click', () => {
+                    console.log('Start mission button clicked');
+                    const startScreen = document.getElementById('start-screen');
+                    isStartScreen = false;
                     
-                    // Show UI after zoom animation completes
-                    document.getElementById('ui').classList.remove('hidden');
-                    document.getElementById('instructions').classList.remove('hidden');
-                }
+                    // Hide start screen with fade out
+                    startScreen.style.opacity = '0';
+                    startScreen.style.transition = 'opacity 0.5s ease';
+                    setTimeout(() => {
+                        startScreen.style.display = 'none';
+                    }, 500);
+                    
+                    // Animate zoom in to rocket over 2 seconds
+                    const animationDuration = 2000; // 2 seconds
+                    const startTime = Date.now();
+                    const startZoom = camera.zoom;
+                    const targetZoom = 5e-4; // Final zoom level for gameplay
+                    const startX = camera.x;
+                    const startY = camera.y;
+                    
+                    console.log('Starting zoom animation from zoom:', startZoom, 'to:', targetZoom);
+                    
+                    function animateZoomToRocket() {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / animationDuration, 1);
+                        
+                        // Smooth easing function
+                        const easeInOut = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                        const easedProgress = easeInOut(progress);
+                        
+                        // Interpolate zoom and position
+                        camera.zoom = startZoom + (targetZoom - startZoom) * easedProgress;
+                        camera.x = (1 - easedProgress) * startX + easedProgress * positionX;
+                        camera.y = (1 - easedProgress) * startY + easedProgress * positionY;
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animateZoomToRocket);
+                        } else {
+                            // Animation complete - enable rocket following and full speed
+                            followRocket = true;
+                            updateFollowButton();
+                            slowMotionFactor = 1.0; // Return to normal speed
+                            
+                            // Show UI after zoom animation completes
+                            const ui = document.getElementById('ui');
+                            const instructions = document.getElementById('instructions');
+                            ui.classList.remove('hidden');
+                            instructions.classList.remove('hidden');
+                            ui.style.opacity = '0';
+                            instructions.style.opacity = '0';
+                            setTimeout(() => {
+                                ui.style.transition = 'opacity 0.7s';
+                                instructions.style.transition = 'opacity 0.7s';
+                                ui.style.opacity = '1';
+                                instructions.style.opacity = '1';
+                            }, 10);
+                            
+                            console.log('Zoom animation complete. Rocket following enabled.');
+                        }
+                    }
+                    
+                    animateZoomToRocket();
+                });
+            } else {
+                console.error('Start mission button not found!');
             }
-            
-            animateZoomToRocket();
         });
 
         function init() {
+            console.log('Init function called');
+            
+            // Ensure canvas is properly sized first
             resizeCanvas();
+            
+            // Test canvas by drawing a simple red rectangle
+            ctx.fillStyle = 'red';
+            ctx.fillRect(100, 100, 200, 100);
+            console.log('Test rectangle drawn');
+            
+            console.log('Starting initialization');
             generateStars();
             generateAsteroids();
             
             // Initialize celestial body positions
             for (const [, body] of Object.entries(celestialBodies)) {
                 if (body.distance && body.period) {
-                    body.x = Math.cos(body.angle * Math.PI / 180) * body.distance;
-                    body.y = Math.sin(body.angle * Math.PI / 180) * body.distance;
+                    const angleRad = body.angle * Math.PI / 180;
+                    body.x = Math.cos(angleRad) * body.distance;
+                    body.y = Math.sin(angleRad) * body.distance;
                 }
             }
             
-            // Initialize rocket in proper Earth orbit BEFORE setting camera
+            // Initialize rocket in proper Earth orbit
             resetRocket();
             
-            // Set initial camera for start screen - zoomed out to show solar system
-            camera.zoom = 2e-8; // Very far out to see whole solar system
-            camera.x = 0; // Center on solar system
+            // Set preview zoom so Mercury's orbit is ~60px from the Sun
+            const desiredMercuryScreenDist = 60;
+            camera.x = 0;
             camera.y = 0;
-            followRocket = false;
+            camera.zoom = desiredMercuryScreenDist / celestialBodies.mercury.distance;
+            
+            followRocket = false; // On start screen, don't follow rocket
+            isStartScreen = true; // Make sure start screen flag is set
             
             // Hide UI during start screen
             document.getElementById('ui').classList.add('hidden');
@@ -1147,22 +1288,38 @@
             document.getElementById('start-screen').style.display = 'block';
             document.getElementById('start-screen').style.opacity = '1';
             
-            // Log rocket initial state for debugging
-            console.log('Initial rocket position:', positionX, positionY);
-            console.log('Initial rocket velocity:', rocketVelocityX, rocketVelocityY);
-            console.log('Earth position:', celestialBodies.earth.x, celestialBodies.earth.y);
+            // Log initialization info for debugging
+            console.log('Initialization complete:');
+            console.log('- Canvas size:', canvas.width, 'x', canvas.height);
+            console.log('- Initial camera zoom:', camera.zoom);
+            console.log('- Neptune distance:', celestialBodies.neptune.distance.toExponential(2));
+            console.log('- Rocket position:', positionX.toExponential(2), positionY.toExponential(2));
+            console.log('- Earth position:', celestialBodies.earth.x.toExponential(2), celestialBodies.earth.y.toExponential(2));
             
-            requestAnimationFrame((time) => {
-                lastTime = time;
-                gameLoop(time);
-            });
+            // Test drawing the Sun to center of screen to verify worldToScreen works
+            const sunScreenPos = worldToScreen(0, 0);
+            console.log('- Sun screen position:', sunScreenPos.x.toFixed(1), sunScreenPos.y.toFixed(1));
+            
+            // Start the game loop immediately
+            lastTime = performance.now();
+            gameLoop(lastTime);
             
             setInterval(handleInput, 16);
         }
 
         window.addEventListener('resize', resizeCanvas);
         
-        init();
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing...');
+            init();
+        });
+        
+        // Fallback initialization if DOMContentLoaded already fired
+        if (document.readyState !== 'loading') {
+            console.log('DOM already loaded, initializing immediately...');
+            init();
+        }
     </script>
 </body>
 </html>

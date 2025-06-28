@@ -32,7 +32,6 @@ This project addresses the "Orbital Navigation & Flight Path Optimization" and "
    - `F`: Toggle camera follow mode
    - `+`: Zoom in
    - `-`: Zoom out
-   - `1-4`: Adjust time scale
    - `R`: Reset simulation
    - `H` or `?`: Show help
 
