@@ -13,7 +13,7 @@ This project addresses the "Orbital Navigation & Flight Path Optimization" and "
 ## Features
 
 - Real-time physics simulation based on Newtonian mechanics and gravitational forces
-- Interactive spacecraft controls (W/A/S/D keyboard inputs)
+- Interactive spacecraft controls (W/A/S keyboard inputs)
 - Realistic orbital mechanics
 - Educational content explaining physics principles as you play
 - Mission-based objectives to guide learning
@@ -28,12 +28,10 @@ This project addresses the "Orbital Navigation & Flight Path Optimization" and "
    - `W`: Accelerate (fire main engines)
    - `A`: Rotate spacecraft left
    - `D`: Rotate spacecraft right
-   - `S`: Brake/Reverse thrust
    - `F`: Toggle camera follow mode
    - `+`: Zoom in
    - `-`: Zoom out
    - `R`: Reset simulation
-   - `H` or `?`: Show help
 
 4. Try to complete the mission objectives displayed in the control panel.
 5. Click on the Physics Info panel to learn more about the current physics principle being demonstrated.
