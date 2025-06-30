@@ -2,8 +2,6 @@
 
 A web-based interactive space flight simulator that teaches orbital mechanics and physics through gameplay. This project was created for the SpaceHacks competition.
 
-![Space Flight Simulator](https://via.placeholder.com/800x400?text=Space+Flight+Simulator)
-
 ## Overview
 
 The Space Flight Simulator allows users to experiment with spacecraft navigation in a physics-accurate environment. By controlling a virtual spacecraft, users can learn about orbital mechanics, gravitational forces, and Newtonian physics through direct interaction and guided missions.
