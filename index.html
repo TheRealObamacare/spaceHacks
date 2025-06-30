@@ -279,24 +279,8 @@
             </div>
             
             <div class="control-group">
-                <label>📊 Telemetry:</label>
+                <label>⛽ Fuel:</label>
                 <div class="info">
-                    <div class="info-row">
-                        <span>Speed:</span>
-                        <span id="speed" class="good">0 km/s</span>
-                    </div>
-                    <div class="info-row">
-                        <span>Altitude:</span>
-                        <span id="altitude">0 km</span>
-                    </div>
-                    <div class="info-row">
-                        <span>G-Force:</span>
-                        <span id="gforce">0.0 G</span>
-                    </div>
-                    <div class="info-row">
-                        <span>Nearest:</span>
-                        <span id="nearest">Earth</span>
-                    </div>
                     <div class="info-row">
                         <span>Fuel:</span>
                         <span id="fuel-percent">100%</span>
@@ -480,6 +464,7 @@
             if (celestialBodies[key].distance) {
                 celestialBodies[key].distance *= DISTANCE_SCALE;
             }
+            celestialBodies[key].radius *= .08; // Scale down radii for better visibility
         }
 
         // After celestialBodies definition, set static positions:
@@ -919,95 +904,12 @@
             ctx.restore();
         }
 
-        function drawVelocityVector() {
-            const screenPos = worldToScreen(positionX, positionY);
-            const speed = Math.sqrt(rocketVelocityX * rocketVelocityX + rocketVelocityY * rocketVelocityY);
-            
-            if (speed > 0) {
-                const scale = Math.min(100, speed / 200);
-                const endX = screenPos.x + (rocketVelocityX / speed) * scale;
-                const endY = screenPos.y + (rocketVelocityY / speed) * scale;
-                
-                ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(screenPos.x, screenPos.y);
-                ctx.lineTo(endX, endY);
-                ctx.stroke();
-                
-                const angle = Math.atan2(endY - screenPos.y, endX - screenPos.x);
-                ctx.fillStyle = '#00ff00';
-                ctx.beginPath();
-                ctx.moveTo(endX, endY);
-                ctx.lineTo(endX - 6 * Math.cos(angle - 0.5), endY - 6 * Math.sin(angle - 0.5));
-                ctx.lineTo(endX - 6 * Math.cos(angle + 0.5), endY - 6 * Math.sin(angle + 0.5));
-                ctx.closePath();
-                ctx.fill();
-            }
-        }
-
         function updateCamera() {
             if (followRocket && !isStartScreen) {
                 camera.x = positionX;
                 camera.y = positionY;
             }
         }        function updateUI() {
-            const speed = Math.sqrt(rocketVelocityX * rocketVelocityX + rocketVelocityY * rocketVelocityY) / 1000;
-            const speedEl = document.getElementById('speed');
-            speedEl.textContent = `${speed.toFixed(1)} km/s`;
-            
-            if (speed < 5) {
-                speedEl.className = 'warning';
-            } else if (speed < 12) {
-                speedEl.className = 'good';
-            } else {
-                speedEl.className = 'caution';
-            }
-            
-            // Find nearest celestial body
-            let nearestBody = 'sun';
-            let nearestDistance = calculateDistance(positionX, positionY, 0, 0);
-            for (const [name, body] of Object.entries(celestialBodies)) {
-                const distance = calculateDistance(positionX, positionY, body.x, body.y);
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestBody = name;
-                }
-            }
-            
-            document.getElementById('nearest').textContent = nearestBody.charAt(0).toUpperCase() + nearestBody.slice(1);
-            
-            // Calculate altitude properly
-            if (nearestBody === 'earth') {
-                const altitude = (nearestDistance - EARTH_RADIUS) / 1000;
-                document.getElementById('altitude').textContent = `${altitude.toFixed(0)} km`;
-            } else {
-                document.getElementById('altitude').textContent = `${(nearestDistance / 1000).toFixed(0)} km`;
-            }
-            
-            // Calculate total acceleration (G-force) from all forces
-            let totalFx = 0;
-            let totalFy = 0;
-            
-            // Add gravitational forces from all bodies
-            for (const [, body] of Object.entries(celestialBodies)) {
-                const force = calculateGravitationalForce(body.x, body.y, body.mass);
-                totalFx += force.fx;
-                totalFy += force.fy;
-            }
-            
-            // Add thrust force
-            const thrustForce = calculateThrustForce();
-            totalFx += thrustForce.fx;
-            totalFy += thrustForce.fy;
-            
-            // Calculate total acceleration
-            const totalMass = ROCKET_DRY_MASS + (rocketFuel / 100) * FUEL_MASS;
-            const totalAcceleration = Math.sqrt(totalFx * totalFx + totalFy * totalFy) / totalMass;
-            const gForce = totalAcceleration / 9.81;
-            
-            document.getElementById('gforce').textContent = `${gForce.toFixed(1)} G`;
-            
             // Update fuel display
             document.getElementById('fuel-percent').textContent = `${Math.round(rocketFuel)}%`;
             const fuelFill = document.getElementById('fuel-fill');
@@ -1060,7 +962,6 @@
             }
             
             drawRocket();
-            drawVelocityVector();
             
             updateUI();
             

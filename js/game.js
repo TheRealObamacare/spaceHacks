@@ -323,8 +323,8 @@ function resetRocket() {
         }
     }
     
-    // Start the rocket in stable Earth orbit at a safe distance
-    const earthOrbitRadius = EARTH_RADIUS + 400000; // 400km altitude from Earth surface
+    // Start the rocket closer to Earth at a static position with 20 km/s speed
+    const earthOrbitRadius = EARTH_RADIUS + 200000; // 200km altitude from Earth surface (closer)
     positionX = celestialBodies.earth.x + earthOrbitRadius; // Position relative to Earth's current location
     positionY = celestialBodies.earth.y;
     
@@ -336,10 +336,10 @@ function resetRocket() {
     const earthVelX = -earthOrbitalSpeed * (celestialBodies.earth.y / earthSunDistance);
     const earthVelY = earthOrbitalSpeed * (celestialBodies.earth.x / earthSunDistance);
     
-    // Rocket's orbital velocity around Earth (tangent to its orbit around Earth)
-    const rocketOrbitalSpeed = Math.sqrt(G * EARTH_MASS / earthOrbitRadius);
+    // Set rocket velocity to 20 km/s (20,000 m/s) in tangent direction
+    const rocketSpeed = 20000; // 20 km/s in m/s
     
-    // Calculate proper tangent velocity for stable orbit
+    // Calculate proper tangent velocity for the desired speed
     // Rocket position relative to Earth
     const relativeX = positionX - celestialBodies.earth.x;
     const relativeY = positionY - celestialBodies.earth.y;
@@ -349,11 +349,11 @@ function resetRocket() {
     const tangentX = -relativeY / relativeDistance;
     const tangentY = relativeX / relativeDistance;
     
-    // Rocket velocity relative to Earth (in tangent direction for stable orbit)
-    const rocketVelX = rocketOrbitalSpeed * tangentX;
-    const rocketVelY = rocketOrbitalSpeed * tangentY;
+    // Rocket velocity relative to Earth (in tangent direction at 20 km/s)
+    const rocketVelX = rocketSpeed * tangentX;
+    const rocketVelY = rocketSpeed * tangentY;
     
-    // Total velocity is Earth's orbital velocity plus rocket's orbital velocity around Earth
+    // Total velocity is Earth's orbital velocity plus rocket's velocity around Earth
     rocketVelocityX = earthVelX + rocketVelX;
     rocketVelocityY = earthVelY + rocketVelY;
     
@@ -362,7 +362,8 @@ function resetRocket() {
         rocketPos: {x: positionX, y: positionY},
         earthVel: {x: earthVelX, y: earthVelY, speed: earthOrbitalSpeed},
         rocketVel: {x: rocketVelocityX, y: rocketVelocityY},
-        rocketOrbitalSpeed: rocketOrbitalSpeed,
+        rocketSpeed: rocketSpeed,
+        altitude: earthOrbitRadius - EARTH_RADIUS,
         relativePos: {x: relativeX, y: relativeY},
         tangentDir: {x: tangentX, y: tangentY}
     });
@@ -662,9 +663,8 @@ function gameLoop(currentTime) {
         drawAsteroid(asteroid);
     }
     
-    // Draw rocket and velocity vector
+    // Draw rocket
     drawRocket();
-    drawVelocityVector();
     
     // Update UI
     updateUI();

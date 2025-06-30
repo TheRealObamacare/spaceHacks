@@ -302,13 +302,31 @@ function calculateRocketPosition(time) {
 
 function resetRocket() {
     rocketThrust = 0;
-    rocketVelocityX = 0;
-    rocketVelocityY = 0;
-    positionX = 0;
-    positionY = 0;
-    angle = 0;
+    
+    // Start the rocket closer to Earth at 200km altitude with 20 km/s speed
+    const earthOrbitRadius = EARTH_RADIUS + 200000; // 200km altitude from Earth surface
+    positionX = celestialBodies.earth.x + earthOrbitRadius;
+    positionY = celestialBodies.earth.y;
+    
+    // Set rocket velocity to 20 km/s (20,000 m/s) in tangent direction
+    const rocketSpeed = 20000; // 20 km/s in m/s
+    
+    // Calculate tangent direction for orbital motion
+    const relativeX = positionX - celestialBodies.earth.x;
+    const relativeY = positionY - celestialBodies.earth.y;
+    const relativeDistance = Math.sqrt(relativeX * relativeX + relativeY * relativeY);
+    
+    // Tangent direction (perpendicular to radius vector)
+    const tangentX = -relativeY / relativeDistance;
+    const tangentY = relativeX / relativeDistance;
+    
+    // Set rocket velocity components
+    rocketVelocityX = rocketSpeed * tangentX;
+    rocketVelocityY = rocketSpeed * tangentY;
+    
+    angle = Math.atan2(tangentY, tangentX) * 180 / Math.PI; // Point in direction of motion
     rocketFuel = 100;
-    console.log('Rocket reset');
+    console.log('Rocket reset to 20 km/s at 200km altitude');
 }
 
 function togglePause() {
@@ -483,34 +501,12 @@ function getVectorAnalysis() {
 function updateHUDWithVectorData() {
     const analysis = getVectorAnalysis();
     
-    // Update velocity display with direction
-    const velocityElement = document.getElementById('velocity-value');
-    if (velocityElement) {
-        const velocityKmPerS = (analysis.velocity.magnitude / 1000).toFixed(2);
-        const velocityDirection = analysis.velocity.direction.toFixed(1);
-        velocityElement.textContent = `${velocityKmPerS} km/s @ ${velocityDirection}°`;
-    }
-    
-    // Update acceleration display with direction
-    const accelerationElement = document.getElementById('acceleration-value');
-    if (accelerationElement) {
-        const accelMagnitude = analysis.acceleration.magnitude.toFixed(2);
-        const accelDirection = analysis.acceleration.direction.toFixed(1);
-        accelerationElement.textContent = `${accelMagnitude} m/s² @ ${accelDirection}°`;
-    }
-    
     // Update fuel display
     const fuelBar = document.getElementById('fuel-bar');
     if (fuelBar) {
         fuelBar.style.width = `${rocketFuel}%`;
         fuelBar.style.backgroundColor = rocketFuel > 25 ? '#4CAF50' : 
                                        rocketFuel > 10 ? '#FF9800' : '#F44336';
-    }
-    
-    // Update gravity display with G-force
-    const gravityElement = document.getElementById('gravity-value');
-    if (gravityElement) {
-        gravityElement.textContent = `${analysis.gForce.toFixed(2)} G`;
     }
     
     return analysis;

@@ -202,12 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.updateHUDWithVectorData();
             else if(typeof window.updateHUD==='function')
                 window.updateHUD();
-            const ip=document.getElementById('info-position');
-            if(ip&&rs.position)
-                ip.textContent=`X:${rs.position.x.toExponential(2)},Y:${rs.position.y.toExponential(2)}`;
-            const inb=document.getElementById('info-nearest-body');
-            if(inb&&rs.nearestBody)
-                inb.textContent=`${rs.nearestBody.name}(${rs.nearestBody.distance.toExponential(2)}m)`;
         } catch (e) { console.error("Error in initial render/HUD:", e); }
     }
 });
@@ -234,13 +228,6 @@ function gameLoop() {
                 window.updateHUDWithVectorData();
             else if(typeof window.updateHUD === 'function') 
                 window.updateHUD();
-            const ip=document.getElementById('info-position');
-            
-            if(ip&&rs.position)
-                ip.textContent=`X:${rs.position.x.toExponential(2)},Y:${rs.position.y.toExponential(2)}`;
-            const inb=document.getElementById('info-nearest-body');
-            if(inb&&rs.nearestBody)
-                inb.textContent=`${rs.nearestBody.name}(${rs.nearestBody.distance.toExponential(2)}m)`;
         }
     }
     gameLoopRequestId = requestAnimationFrame(gameLoop);
